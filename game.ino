@@ -14,7 +14,7 @@ int x = 85;
 int y = 85;
 
 unsigned long lastUpdate = 0;
-const int updateInterval = 16;dasd
+const int updateInterval = 16;
 
 // Initialize the display
 Adafruit_ILI9341 tft(TFT_CS, TFT_DC, TFT_RST);
