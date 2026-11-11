@@ -6,8 +6,8 @@
 #define TFT_CS   10
 #define TFT_DC    9
 #define TFT_RST   8
-#define vert A0
-#define horz A1
+#define vert A12
+#define horz A11
 #define SEL_PIN 6
 
 int x = 85; 
@@ -20,7 +20,7 @@ unsigned long lastUpdate = 0;
 const int updateInterval = 16;
 
 // Initialize the display
-Adafruit_ILI9341 tft(TFT_CS, TFT_DC, TFT_RST);
+Adafruit_ILI9341 tft(TFT_CS, TFT_DC, 11, 13, TFT_RST, 12);
 
 const byte heart[8][8] = {
     {0, 1, 1, 0, 0, 1, 1, 0},
@@ -129,13 +129,13 @@ void loop() {
     H = 60;
     }
 
-    if (vertical < 400){
+    if (vertical > 600){
     x = 110;
     y = 160;
     W = 60;
     H = 7;
     }
-    if (vertical > 600){
+    if (vertical < 400){
     x = 110;
     y = 65;
     W = 60;
