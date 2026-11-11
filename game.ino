@@ -13,6 +13,9 @@
 int x = 85; 
 int y = 85;
 
+int W = 7;
+int H = 60;
+
 unsigned long lastUpdate = 0;
 const int updateInterval = 16;
 
@@ -107,23 +110,46 @@ void loop() {
     int oldX = x;
     int oldY = y;
 
+    int oldW = W;
+    int oldH = H;
+
     int horizontal = analogRead(horz);
     int vertical = analogRead(vert);
 
-    if (horizontal < 400) x = 190;
-    if (horizontal > 600) x = 85;
+    if (horizontal < 400){
+    x = 190;
+    y = 85;
+    W = 7;
+    H = 60;
+    } 
+    if (horizontal > 600){
+    x = 85;
+    y = 85;
+    W = 7;
+    H = 60;
+    }
 
-    if (vertical < 400) y+=5;
-    if (vertical > 600) y-=5;
+    if (vertical < 400){
+    x = 110;
+    y = 160;
+    W = 60;
+    H = 7;
+    }
+    if (vertical > 600){
+    x = 110;
+    y = 65;
+    W = 60;
+    H = 7; 
+    }
 
     //x = constrain(x, 0, tft.width() - 40);
     //y = constrain(y, 0, tft.height() - 35);
 
 if(oldX != x || oldY!= y){
-    tft.fillRect(oldX, oldY, 7, 60, ILI9341_BLACK);
+    tft.fillRect(oldX, oldY, oldW, oldH, ILI9341_BLACK);
 }
     drawHeart(120, 100);
     //drawShield(90, 100);
-    tft.fillRect(x, 85, 7, 60, ILI9341_WHITE);
+    tft.fillRect(x, y, W, H, ILI9341_WHITE);
   }
 }
