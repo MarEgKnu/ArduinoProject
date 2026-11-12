@@ -25,13 +25,16 @@ struct ShieldState {
 #define horz A11
 #define SEL_PIN 6
 
-const int pixel_multiplier = 5; // How many pixels is one x and y coordinate in our code?
+const int pixel_multiplier = 3; // How many pixels is one x and y coordinate in our code?
 
 const int screenSizeX = 320;
 const int screenSizeY = 240;
 
+const int playAreaX = 240;
+const int playAreaY = 240;
+
 const int heartSizeX = 8;
-const int heartSizeY = 8;
+const int heartSizeY = 7;
 
 // Midpoint of the player is in the middle of the screen
 const int heartMidpointX = screenSizeX / 2;
@@ -69,13 +72,13 @@ const Sprite<heartSizeX, heartSizeY> heart = {
         {0, 1, 1, 1, 1, 1, 1, 0},
         {0, 0, 1, 1, 1, 1, 0, 0},
         {0, 0, 0, 1, 1, 0, 0, 0},
-        {0, 0, 0, 0, 0, 0, 0, 0},
     }
 };
 
 
 Sprite<shieldSizeX,shieldSizeY> shieldVertical = {
     .data = {
+        {2, 2},
         {2, 2},
         {2, 2},
         {2, 2},
@@ -159,7 +162,8 @@ void setup() {
     // Set screen orientation
     tft.setRotation(1);
 
-    tft.fillScreen(ILI9341_BLACK);
+    tft.fillScreen(ILI9341_WHITE);
+    tft.fillRect(heartMidpointX - (playAreaX/2), heartMidpointY - (playAreaY/2), playAreaX, playAreaY, ILI9341_BLACK);
 
 
 }
@@ -170,11 +174,6 @@ void loop() {
 
     // Get direction of the joystick
     Direction joystickDirection = getJoystickDirection();
-
-
-
-    int horizontal = analogRead(horz);
-    int vertical = analogRead(vert);
 
     if(joystickDirection != lastJoystickDirection) {
         lastJoystickDirection = joystickDirection;
@@ -189,32 +188,32 @@ void loop() {
         switch(joystickDirection) {
         // Set the shield bounding box, calculate the exact coordinates where it should appear and draw it on the screen
         case Direction::Left: {
-            int x = (heartMidpointX - heartSizeX * pixel_multiplier / 2) - shieldOffsetFromPlayer * pixel_multiplier;
-            int y = (heartMidpointY - heartSizeY * pixel_multiplier / 2) - shieldSizeX * pixel_multiplier / 2;
+            int x = (heartDrawPosX) - shieldOffsetFromPlayer * pixel_multiplier;
+            int y = (heartDrawPosY) - shieldSizeY / 2;
             currentShieldState.currentPosition = shieldVertical.GetBoundingBox(x, y);
             currentShieldState.isActive = true;
             drawSprite(x, y, shieldVertical);
             break;
         }
         case Direction::Right: {
-            int x = (heartMidpointX + heartSizeX * pixel_multiplier / 2) + shieldOffsetFromPlayer * pixel_multiplier - shieldSizeX * pixel_multiplier;
-            int y = (heartMidpointY - heartSizeY * pixel_multiplier / 2) - shieldSizeX * pixel_multiplier / 2;
+            int x = (heartDrawPosX + heartSizeX * pixel_multiplier) + shieldOffsetFromPlayer * pixel_multiplier - shieldSizeX * pixel_multiplier;
+            int y = (heartDrawPosY) - shieldSizeY / 2;
             currentShieldState.currentPosition = shieldVertical.GetBoundingBox(x, y);
             currentShieldState.isActive = true;
             drawSprite(x, y, shieldVertical);
             break;
         }
         case Direction::Up: {
-            int x = (heartMidpointX - heartSizeX * pixel_multiplier / 2) - shieldSizeX * pixel_multiplier / 2;
-            int y = (heartMidpointY - heartSizeY * pixel_multiplier / 2) - shieldOffsetFromPlayer * pixel_multiplier;
+            int x = (heartDrawPosX) - shieldSizeX * pixel_multiplier / 2;
+            int y = (heartDrawPosY) - shieldOffsetFromPlayer * pixel_multiplier;
             currentShieldState.currentPosition = shieldHorizontal.GetBoundingBox(x, y);
             currentShieldState.isActive = true;
             drawSprite(x, y, shieldHorizontal);
             break;
         }
         case Direction::Down: {
-            int x = (heartMidpointX - heartSizeX * pixel_multiplier / 2) - shieldSizeX * pixel_multiplier / 2;
-            int y = (heartMidpointY + heartSizeY * pixel_multiplier / 2) + shieldOffsetFromPlayer * pixel_multiplier;
+            int x = (heartDrawPosX) - shieldSizeX * pixel_multiplier / 2;
+            int y = (heartDrawPosY + heartSizeY * pixel_multiplier) + shieldOffsetFromPlayer * pixel_multiplier - shieldSizeX * pixel_multiplier;
             currentShieldState.currentPosition = shieldHorizontal.GetBoundingBox(x, y);
             currentShieldState.isActive = true;
             drawSprite(x, y, shieldHorizontal);
