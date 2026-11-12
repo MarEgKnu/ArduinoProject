@@ -30,7 +30,7 @@ int SoftwareColorToHardwareColor(SoftwareColor color) {
 
 template<uint8_t XDim, uint8_t YDim>
 struct Sprite {
-  uint8_t data[XDim][YDim];
+  uint8_t data[YDim][XDim];
 
   Rectangle GetBoundingBox(int x, int y) {
     return Rectangle{.topLeftCorner = {x, y}, .bottomRightCorner = {x + XDim, y + YDim} };
@@ -38,8 +38,8 @@ struct Sprite {
 
   Sprite GetMirroredSprite() const {
     Sprite<XDim, YDim> sprite{};
-    for(int x = 0; x < XDim;x++) {
-      for(int y = 0; y < YDim;y++) {
+    for(int x = 0; x < YDim;x++) {
+      for(int y = 0; y < XDim;y++) {
         sprite.data[XDim - 1 - x][YDim - 1 - y] = data[x][y];
       }
     }
@@ -47,8 +47,8 @@ struct Sprite {
   }
   Sprite<YDim, XDim> GetRotatedSprite() const {
     Sprite<YDim, XDim> sprite{};
-    for(int x = 0; x < XDim;x++) {
-      for(int y = 0; y < YDim;y++) {
+    for(int x = 0; x < YDim;x++) {
+      for(int y = 0; y < XDim;y++) {
         sprite.data[y][x] = data[x][y];
       }
     }

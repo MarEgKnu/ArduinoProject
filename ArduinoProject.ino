@@ -12,6 +12,11 @@ enum class Direction : uint8_t {
     Down
 };
 
+struct ShieldState {
+    bool isActive = false;
+    Rectangle currentPosition{};
+};
+
 // Define the TFT pins
 #define TFT_CS   10
 #define TFT_DC    9
@@ -36,26 +41,19 @@ const int heartMidpointY = screenSizeY / 2;
 const int heartDrawPosX = heartMidpointX - (heartSizeX * pixel_multiplier / 2);
 const int heartDrawPosY = heartMidpointY - (heartSizeY * pixel_multiplier / 2);
 
+// How far the shield should be from the player object.
 const int shieldOffsetFromPlayer = 4;
 
-const int shieldSizeX = 10;
-const int shieldSizeY = 2;
-
-int x = 85; 
-int y = 85;
-
-int W = 7;
-int H = 60;
+const int shieldSizeX = 2;
+const int shieldSizeY = 10;
 
 unsigned long lastUpdate = 0;
 const int updateInterval = 16;
 
 //Gamestate variables
 
-// The current position (and bounding box) of the player shield
-Rectangle currentShieldPosition;
-// Changes to true when the shield has been moved atleast once by the player
-bool hasMovedShield = false;
+// The current position (and bounding box) of the player shield, and a bool determining if it is currently active or not
+ShieldState currentShieldState;
 Direction lastJoystickDirection = Direction::None;
 
 
@@ -95,26 +93,23 @@ Direction getJoystickDirection() {
     int horizontal = analogRead(horz);
     int vertical = analogRead(vert);
 
-    if (horizontal > 620 && vertical <= 1){
-        Serial.println("left");
-        return Direction::Left;
+    if (horizontal < 400){
+        return Direction::Right;
     } 
-    else if (horizontal < 420 && vertical <= 1){
-        Serial.println("Right");
-       return Direction::Right;
+    else if (horizontal > 600){
+        return Direction::Left;
     }
 
-    else if (vertical < 400 && horizontal < 1020 ){
-        Serial.println("Up");
-        return Direction::Up;
+    else if (vertical > 600){
+       return Direction::Down;
     }
-    else if (vertical > 600 && horizontal < 1020){
-        Serial.println("Down");
-        return Direction::Down;
+    else if (vertical < 400){
+        return Direction::Up;
     }
     else {
         return Direction::None;
     }
+
 }
 
 void drawRectangle(const Rectangle& rectangle, SoftwareColor color) {
@@ -125,31 +120,19 @@ void drawRectangle(const Rectangle& rectangle, SoftwareColor color) {
     int xSize = xEnd - xStart;
     int ySize = yEnd - yStart;
     int hrwdColor = SoftwareColorToHardwareColor(color);
-    //Serial.print(" xstart: ");
-    //Serial.print(xStart);
-    //Serial.print(" ystart: ");
-    //Serial.print(yStart);
-    //Serial.print(" xEnd: ");
-    //Serial.print(xEnd);
-    //Serial.print(" yEnd: ");
-    //Serial.print(yEnd);
-    //Serial.print(" xsize: ");
-    //Serial.print(xSize);
-    //Serial.print(" ysize: ");
-    //Serial.println(ySize);
     tft.fillRect(
                 xStart,
                 yStart,
-                xSize,
-                ySize,
+                xSize * pixel_multiplier,
+                ySize * pixel_multiplier,
                 hrwdColor
             );
 }
 
 template<uint8_t XDim, uint8_t YDim>
 void drawSprite(int x, int y, const Sprite<XDim,YDim>& sprite) {
-    for (int row = 0; row < XDim; row++) {
-        for (int col = 0; col < YDim; col++) {
+    for (int row = 0; row < YDim; row++) {
+        for (int col = 0; col < XDim; col++) {
             int colorID = SoftwareColorToHardwareColor(SoftwareColor(sprite.data[row][col]));
             tft.fillRect(
                 x + col * pixel_multiplier,
@@ -185,11 +168,6 @@ void loop() {
   if (millis() - lastUpdate >= updateInterval) {
     lastUpdate = millis();
 
-    int oldX = x;
-    int oldY = y;
-
-    int oldW = W;
-    int oldH = H;
     // Get direction of the joystick
     Direction joystickDirection = getJoystickDirection();
 
@@ -198,76 +176,59 @@ void loop() {
     int horizontal = analogRead(horz);
     int vertical = analogRead(vert);
 
-    if (horizontal < 400){
-        x = 190;
-        y = 85;
-        W = 7;
-        H = 60;
-    } 
-    if (horizontal > 600){
-        x = 85;
-        y = 85;
-        W = 7;
-        H = 60;
-    }
-
-    if (vertical > 600){
-        x = 110;
-        y = 160;
-        W = 60;
-        H = 7;
-    }
-    if (vertical < 400){
-        x = 110;
-        y = 65;
-        W = 60;
-        H = 7; 
-    }
     if(joystickDirection != lastJoystickDirection) {
         lastJoystickDirection = joystickDirection;
+        ShieldState oldShieldState = currentShieldState;
+        // If the previous shield state was active, remove it from the display
+        if(oldShieldState.isActive) {
+            Serial.println(int(joystickDirection));
+            drawRectangle(currentShieldState.currentPosition, SoftwareColor::Black);
+        }
 
-        Rectangle oldShieldPos = currentShieldPosition;
+
         switch(joystickDirection) {
         // Set the shield bounding box, calculate the exact coordinates where it should appear and draw it on the screen
         case Direction::Left: {
             int x = (heartMidpointX - heartSizeX * pixel_multiplier / 2) - shieldOffsetFromPlayer * pixel_multiplier;
-            int y = (heartMidpointY - heartSizeY * pixel_multiplier / 2) - shieldSizeY * pixel_multiplier / 2;
-            currentShieldPosition = shieldVertical.GetBoundingBox(x, y);
+            int y = (heartMidpointY - heartSizeY * pixel_multiplier / 2) - shieldSizeX * pixel_multiplier / 2;
+            currentShieldState.currentPosition = shieldVertical.GetBoundingBox(x, y);
+            currentShieldState.isActive = true;
             drawSprite(x, y, shieldVertical);
             break;
         }
         case Direction::Right: {
-            int x = (heartMidpointX + heartSizeX * pixel_multiplier / 2) + shieldOffsetFromPlayer * pixel_multiplier - shieldSizeY * pixel_multiplier;
-            int y = (heartMidpointY - heartSizeY * pixel_multiplier / 2) - shieldSizeY * pixel_multiplier / 2;
-            currentShieldPosition = shieldVertical.GetBoundingBox(x, y);
+            int x = (heartMidpointX + heartSizeX * pixel_multiplier / 2) + shieldOffsetFromPlayer * pixel_multiplier - shieldSizeX * pixel_multiplier;
+            int y = (heartMidpointY - heartSizeY * pixel_multiplier / 2) - shieldSizeX * pixel_multiplier / 2;
+            currentShieldState.currentPosition = shieldVertical.GetBoundingBox(x, y);
+            currentShieldState.isActive = true;
             drawSprite(x, y, shieldVertical);
             break;
         }
         case Direction::Up: {
-            int x = (heartMidpointX - heartSizeX * pixel_multiplier / 2) - shieldSizeY * pixel_multiplier / 2;
+            int x = (heartMidpointX - heartSizeX * pixel_multiplier / 2) - shieldSizeX * pixel_multiplier / 2;
             int y = (heartMidpointY - heartSizeY * pixel_multiplier / 2) - shieldOffsetFromPlayer * pixel_multiplier;
-            currentShieldPosition = shieldHorizontal.GetBoundingBox(x, y);
+            currentShieldState.currentPosition = shieldHorizontal.GetBoundingBox(x, y);
+            currentShieldState.isActive = true;
             drawSprite(x, y, shieldHorizontal);
             break;
         }
         case Direction::Down: {
-            int x = (heartMidpointX - heartSizeX * pixel_multiplier / 2) - shieldSizeY * pixel_multiplier / 2;
+            int x = (heartMidpointX - heartSizeX * pixel_multiplier / 2) - shieldSizeX * pixel_multiplier / 2;
             int y = (heartMidpointY + heartSizeY * pixel_multiplier / 2) + shieldOffsetFromPlayer * pixel_multiplier;
-            currentShieldPosition = shieldHorizontal.GetBoundingBox(x, y);
+            currentShieldState.currentPosition = shieldHorizontal.GetBoundingBox(x, y);
+            currentShieldState.isActive = true;
             drawSprite(x, y, shieldHorizontal);
             break;
         }
+        case Direction::None: {
+            currentShieldState.isActive = false;
+            break;
         }
-        // If player has moved shield before, clear the old shield
-        
-        drawRectangle(oldShieldPos, SoftwareColor::Black);
-        
-        hasMovedShield = true;
+        }
+    
     }
 
     // Draw the player 
     drawSprite(heartDrawPosX, heartDrawPosY, heart);
-    //drawShield(90, 100);
-   // tft.fillRect(x, y, W, H, ILI9341_WHITE);
   }
 }
