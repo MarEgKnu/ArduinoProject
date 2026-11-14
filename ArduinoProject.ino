@@ -207,8 +207,8 @@ void setup() {
 
     tft.fillScreen(ILI9341_WHITE);
     tft.fillRect(heartMidpointX - (playAreaX/2), heartMidpointY - (playAreaY/2), playAreaX, playAreaY, ILI9341_BLACK);
-
-
+    tft.fillRect(20, 30, 10, 10, ILI9341_RED);
+    tft.fillRect(280, 30, 10, 10, ILI9341_RED);
 }
 
 void loop() {
@@ -280,32 +280,9 @@ void loop() {
 if (millis() - lastBullet >= bulletRate){
 bulletDirection = random(0, 4);
 //bulletType = random(0,1);
-bullet[bulletArray][0] = (bulletDirection == 0 || bulletDirection == 2) ? 1 : 15; // start at step 1 or 15 so sprite stays inside playarea
+bullet[bulletArray][0] = (bulletDirection == 0 || bulletDirection == 2) ? 0 : 16; // start at step 1 or 15 so sprite stays inside playarea
 bullet[bulletArray][1] = bulletDirection; // 0 is lleft, 1 is right, 2 is up and 3 is down
 bullet[bulletArray][2] = 1; // 1 = active. 0 = inactive (skips the for loop below)
-
-switch(bulletDirection){ //should defo make this into a helper function 
-case 0 : //left
-bulletDrawPosX = (bullet[bulletArray][0] * 15) + 40 - (bulletSizeX * pixel_multiplier / 2);
-bulletDrawPosY = heartMidpointY - (bulletSizeY * pixel_multiplier / 2);
-break;
-
-case 2: // up
-bulletDrawPosX = heartMidpointX - (bulletSizeX * pixel_multiplier / 2);
-bulletDrawPosY = (bullet[bulletArray][0] * 15) - (bulletSizeY * pixel_multiplier / 2); 
-break;
-
-case 1 : //right
-bulletDrawPosX = (bullet[bulletArray][0] * 15) + 40 - (bulletSizeX * pixel_multiplier / 2);
-bulletDrawPosY = heartMidpointY - (bulletSizeY * pixel_multiplier / 2);
-break;
-
-case 3: // down
-bulletDrawPosX = heartMidpointX - (bulletSizeX * pixel_multiplier / 2);
-bulletDrawPosY = (bullet[bulletArray][0] * 15) - (bulletSizeY * pixel_multiplier / 2); 
-break;
-}
-drawSprite(bulletDrawPosX, bulletDrawPosY, bulletReal);
 
 bulletArray = (bulletArray + 1) % 8;
 lastBullet = millis();
