@@ -73,16 +73,21 @@ unsigned long lastBullet;
 unsigned long lastBulletUpdate;
 
 // speed of bullet spawn and bullet speed (we use interrupt to tweak this)
-int bulletRate = 1000;
-int bulletSpeed = 500;
+int bulletRate = 750;
+int bulletSpeed = 400;
 
 // self explanatory
 int bulletDirection;
 
 //Gamestate variables
 
-// current shield position
-int shieldPos;
+// current shield position. i set start value to 999 so it doesnt default to 0 (blocks left bullets without doing anything at start)
+int shieldPos = 999;
+
+// how many hits the player can take. can be changed from menu eventually
+int health = 1;
+
+int counter;
 
 int bulletArray = 0;
 
@@ -188,6 +193,13 @@ void drawSprite(int x, int y, const Sprite<XDim,YDim>& sprite) {
     }
 }
 
+void counterDisplay (int number){
+tft.fillRect(240, 0, 40, 40, ILI9341_BLACK);
+tft.setCursor(240, 0);
+tft.setTextColor(ILI9341_WHITE);
+tft.setTextSize(2);
+tft.print(number);
+}
 
 void setup() {
     Serial.begin(9600);
@@ -212,6 +224,8 @@ void setup() {
 }
 
 void loop() {
+
+while(health > 0){
 
   if (millis() - lastUpdate >= updateInterval) {
     lastUpdate = millis();
@@ -334,29 +348,37 @@ break;
 tft.fillRect(oldBulletPosX, oldBulletPosY, bulletSizeX * pixel_multiplier, bulletSizeY * pixel_multiplier, ILI9341_BLACK);
 
 //shield logic
-if ((bullet[i][1] == 0 || bullet[i][1] == 2) && bullet[i][0] >= 6){
+if ((bullet[i][1] == 0 || bullet[i][1] == 2) && bullet[i][0] == 6){
 if(shieldPos != bullet[i][1]){
-// take damage
-// erase bullet
+health--;
+tft.fillScreen(ILI9341_BLACK);
+break;
+//drawSprite(bulletDrawPosX, bulletDrawPosY, bulletReal);
 }
 else {
-// block bullet
-// erase bullet
-// increase counter
-}
-bullet[i][2] = 0;
+bullet[i][2] = 0; // deactivate bullet
+counter++;
+counterDisplay(counter);
 continue;
 }
-else if ((bullet[i][1] == 1 || bullet[i][1] == 3) && bullet[i][0] <= 10){
+}
+
+else if ((bullet[i][1] == 1 || bullet[i][1] == 3) && bullet[i][0] == 10){
 if(shieldPos != bullet[i][1]){
-// take damage
-// erase bullet
+health--;
+tft.fillScreen(ILI9341_BLACK);
+break;
+//drawSprite(bulletDrawPosX, bulletDrawPosY, bulletReal);
 }
 else {
-// block bullet
-// erase bullet
-// increase counter
+bullet[i][2] = 0; // deactivate bullet
+counter++;
+counterDisplay(counter);
+continue;
 }
+}
+
+if (bullet[i][0] == 7 || bullet[i][0] == 9){
 bullet[i][2] = 0;
 continue;
 }
@@ -369,4 +391,10 @@ lastBulletUpdate = millis();
  // Draw the player 
   drawSprite(heartDrawPosX, heartDrawPosY, heart);
   }
+}
+
+tft.setCursor(110, 110);
+tft.setTextColor(ILI9341_WHITE);
+tft.setTextSize(4);
+tft.print("Dead");
 }
