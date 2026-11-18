@@ -4,7 +4,9 @@
 enum class SoftwareColor {
   Black = 0,
   Red = 1,
-  White = 2
+  White = 2,
+  Green = 3,
+  Orange = 4
 };
 
 int SoftwareColorToHardwareColor(SoftwareColor color) {
@@ -18,6 +20,14 @@ int SoftwareColorToHardwareColor(SoftwareColor color) {
     }
     case SoftwareColor::White: {
         return ILI9341_WHITE;
+        break;
+    }
+    case SoftwareColor::Green: {
+        return ILI9341_GREEN;
+        break;
+    }
+     case SoftwareColor::Orange: {
+        return ILI9341_ORANGE;
         break;
     }
     default:{
