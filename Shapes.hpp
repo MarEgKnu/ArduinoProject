@@ -10,4 +10,10 @@ public:
     return topLeftCorner.x <= point.x && point.x <= bottomRightCorner.x &&
            topLeftCorner.y <= point.y && point.y <= bottomRightCorner.y;
   }
+  // Checks if the two rectangles overlap
+  bool RectCollisionCheck(const Rectangle& rect) {
+    //Serial.print(A rect x: );
+    return  (rect.topLeftCorner.x < bottomRightCorner.x && rect.bottomRightCorner.x > topLeftCorner.x &&
+            rect.topLeftCorner.y > bottomRightCorner.y && rect.bottomRightCorner.y < topLeftCorner.y);
+  }
 };

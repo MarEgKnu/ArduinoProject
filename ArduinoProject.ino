@@ -31,7 +31,7 @@ struct ShieldState {
 };
 
 struct Bullet {
-  int position;
+  Vector16 position;
   BulletDirection direction;
   BulletType type;
   bool isActive;
@@ -52,6 +52,12 @@ const int screenSizeY = 240;
 
 const int playAreaX = 240;
 const int playAreaY = 240;
+
+const int playAreaStartX = 40;
+const int playAreaEndX = 200;
+
+const int playAreaStartY = 0;
+const int playAreaEndY = 240;
 
 const int heartSizeX = 8;
 const int heartSizeY = 7;
@@ -94,10 +100,11 @@ unsigned long lastBulletUpdate;
 
 // speed of bullet spawn and bullet speed (we use interrupt to tweak this)
 int bulletRate = 750;
-int bulletSpeed = 400;
+int bulletSpeed = 100;
 
 // self explanatory
 int bulletDirection;
+
 
 //Gamestate variables
 
@@ -249,6 +256,46 @@ void drawSprite(int x, int y, const Sprite<XDim, YDim>& sprite) {
   }
 }
 
+void updateBulletPosition(Bullet& bullet) {
+    switch(bullet.direction) {
+        case BulletDirection::Left:
+            bullet.position.x++;
+            break;
+        case BulletDirection::Right:
+            bullet.position.x--;
+            break;
+        case BulletDirection::Up:
+            bullet.position.y++;
+            break;
+        case BulletDirection::Down:
+            bullet.position.y--;
+            break;
+    }
+}
+
+Bullet InitBullet(BulletDirection direction, BulletType type) {
+    Vector16 position;
+    switch(direction) {
+        case BulletDirection::Left:
+            position.x = playAreaStartX;
+            position.y = heartMidpointY - (bulletSizeY * pixel_multiplier / 2);
+            break;
+        case BulletDirection::Right:
+            position.x = playAreaEndX - bulletSizeX; // offset since it draws towards the right
+            position.y = heartMidpointY - (bulletSizeY * pixel_multiplier / 2);
+            break;
+        case BulletDirection::Up:
+            position.x = heartMidpointX - (bulletSizeX * pixel_multiplier / 2);
+            position.y = playAreaStartY;
+            break;
+        case BulletDirection::Down:
+            position.x = heartMidpointX - (bulletSizeX * pixel_multiplier / 2);
+            position.y = playAreaEndY - bulletSizeY;
+            break;
+    }
+    return Bullet{position, direction, type, true};
+}
+
 void counterDisplay(int number) {
   tft.fillRect(240, 0, 40, 40, ILI9341_BLACK);
   tft.setCursor(240, 0);
@@ -294,7 +341,6 @@ void loop() {
         ShieldState oldShieldState = currentShieldState;
         // If the previous shield state was active, remove it from the display
         if (oldShieldState.isActive) {
-          Serial.println(int(joystickDirection));
           drawRectangle(currentShieldState.currentPosition, SoftwareColor::Black);
         }
 
@@ -349,100 +395,66 @@ void loop() {
             }
         }
       }
-
+      static bool test = false;
 
       // //spawns new bullet after millis exceeds bulletrate. assign direction, type and array to it
-      if (millis() - lastBullet >= bulletRate) {
+      /*if (millis() - lastBullet >= bulletRate) {
         BulletDirection bulletDirection = BulletDirection(random(0, 4));
-        //bulletType = random(0,1);
-        bullets[bulletArray].position = (bulletDirection == BulletDirection::Left || bulletDirection == BulletDirection::Up) ? 0 : 16;  // start at step 1 or 15 so sprite stays inside playarea
-        bullets[bulletArray].direction = bulletDirection;                                                                               // 0 is lleft, 1 is right, 2 is up and 3 is down
-        bullets[bulletArray].isActive = true;                                                                                           // 1 = active. 0 = inactive (skips the for loop below)
-
+        bullets[bulletArray] = InitBullet(bulletDirection, BulletType::Normal);
+                                                                      // 1 = active. 0 = inactive (skips the for loop below)
+        bulletArray = (bulletArray + 1) % 8;
+        lastBullet = millis();
+      }*/
+      if (!test) {
+        test = true
+        BulletDirection bulletDirection = BulletDirection(random(0, 4));
+        bullets[bulletArray] = InitBullet(bulletDirection, BulletType::Normal);
+                                                                      // 1 = active. 0 = inactive (skips the for loop below)
         bulletArray = (bulletArray + 1) % 8;
         lastBullet = millis();
       }
       //loop responsible for updating bullet positions
       if (millis() - lastBulletUpdate >= bulletSpeed) {
-
         for (int i = 0; i < 8; i++) {
-          if (!bullets[i].isActive) continue;
-
-          if (bullets[i].position < 8) {  //basically if bullet is from left or up then increase step
-            bullets[i].position++;
-          } else {  //if bullet is from right or down then decrease step
-            bullets[i].position--;
-          }
-
-          switch (bullets[i].direction) {  //should defo make this into a helper function (2x)
-            case BulletDirection::Left:    //left
-              bulletDrawPosX = (bullets[i].position * 15) + 40 - (bulletSizeX * pixel_multiplier / 2);
-              bulletDrawPosY = heartMidpointY - (bulletSizeY * pixel_multiplier / 2);
-              oldBulletPosX = ((bullets[i].position - 1) * 15) + 40 - (bulletSizeX * pixel_multiplier / 2);
-              oldBulletPosY = bulletDrawPosY;
-              break;
-
-            case BulletDirection::Up:  // up
-              bulletDrawPosX = heartMidpointX - (bulletSizeX * pixel_multiplier / 2);
-              bulletDrawPosY = (bullets[i].position * 15) - (bulletSizeY * pixel_multiplier / 2);
-              oldBulletPosX = bulletDrawPosX;
-              oldBulletPosY = ((bullets[i].position - 1) * 15) - (bulletSizeY * pixel_multiplier / 2);
-              break;
-
-            case BulletDirection::Right:  //right
-              bulletDrawPosX = (bullets[i].position * 15) + 40 - (bulletSizeX * pixel_multiplier / 2);
-              bulletDrawPosY = heartMidpointY - (bulletSizeY * pixel_multiplier / 2);
-              oldBulletPosX = ((bullets[i].position + 1) * 15) + 40 - (bulletSizeX * pixel_multiplier / 2);
-              oldBulletPosY = bulletDrawPosY;
-              break;
-
-            case BulletDirection::Down:  // down
-              bulletDrawPosX = heartMidpointX - (bulletSizeX * pixel_multiplier / 2);
-              bulletDrawPosY = (bullets[i].position * 15) - (bulletSizeY * pixel_multiplier / 2);
-              oldBulletPosX = bulletDrawPosX;
-              oldBulletPosY = ((bullets[i].position + 1) * 15) - (bulletSizeY * pixel_multiplier / 2);
-              break;
-          }
+            // Remove all current bullet draws first thing
+            const Sprite<bulletSizeX, bulletSizeY>& bulletSprite = GetBulletTypeSprite(bullets[i].type);
+            Rectangle bulletBoundingBox = bulletSprite.GetBoundingBox(bullets[i].position.x,bullets[i].position.y);   
+            drawRectangle(bulletBoundingBox, SoftwareColor::Black);
+        }
+        for (int i = 0; i < 8; i++) {
+            if (!bullets[i].isActive) continue;
+            updateBulletPosition(bullets[i]);
+            const Sprite<bulletSizeX, bulletSizeY>& bulletSprite = GetBulletTypeSprite(bullets[i].type);
+            Rectangle bulletBoundingBox = bulletSprite.GetBoundingBox(bullets[i].position.x,bullets[i].position.y);            
+           
+            bool collidesWithShield = bulletBoundingBox.RectCollisionCheck(currentShieldState.currentPosition);
+            if(collidesWithShield) {
+                Serial.println("I WAS HERE");
+                bullets[i].isActive = false;  // deactivate bullet
+                counter++;
+                counterDisplay(counter);
+                continue;
+            }
+            Rectangle playerBoundingBox = bulletSprite.GetBoundingBox(heartDrawPosX, heartDrawPosY);        
+            bool collidesWithPlayer = bulletBoundingBox.RectCollisionCheck(playerBoundingBox);
+            if(collidesWithPlayer) {
+                Serial.println("I WAS HERE");
+                health--;
+                tft.fillScreen(ILI9341_BLACK);
+                break;
+            }
 
           //erase old bullet position
-          tft.fillRect(oldBulletPosX, oldBulletPosY, bulletSizeX * pixel_multiplier, bulletSizeY * pixel_multiplier, ILI9341_BLACK);
+          //tft.fillRect(oldBulletPosX, oldBulletPosY, bulletSizeX * pixel_multiplier, bulletSizeY * pixel_multiplier, ILI9341_BLACK);
 
-          //shield logic
-          if ((bullets[i].direction == BulletDirection::Left || bullets[i].direction == BulletDirection::Up) && bullets[i].position == 6) {
-            if (shieldPos != int(bullets[i].direction)) {
-              health--;
-              tft.fillScreen(ILI9341_BLACK);
-              break;
-              //drawSprite(bulletDrawPosX, bulletDrawPosY, bulletReal);
-            } else {
-              bullets[i].isActive = 0;  // deactivate bullet
-              counter++;
-              counterDisplay(counter);
-              continue;
-            }
-          }
-
-          else if ((bullets[i].direction == BulletDirection::Right || bullets[i].direction == BulletDirection::Down) && bullets[i].position == 10) {
-            if (shieldPos != int(bullets[i].direction)) {
-              health--;
-              tft.fillScreen(ILI9341_BLACK);
-              break;
-              //drawSprite(bulletDrawPosX, bulletDrawPosY, bulletReal);
-            } else {
-              bullets[i].isActive = false;  // deactivate bullet
-              counter++;
-              counterDisplay(counter);
-              continue;
-            }
-          }
-
-          if (bullets[i].position == 7 || bullets[i].position == 9) {
-            bullets[i].isActive = false;
-            continue;
-          }
-
-          drawSprite(bulletDrawPosX, bulletDrawPosY, bulletNormal);
+          
         }
+        // Issue draw calls on active bullets
+        for (int i = 0; i < 8; i++) {
+            if (!bullets[i].isActive) continue;
+            drawSprite(bullets[i].position.x, bullets[i].position.y, bulletNormal);
+        }
+        
         lastBulletUpdate = millis();
       }
 
