@@ -1,5 +1,7 @@
 #pragma once
 #include "Shapes.hpp"
+
+const int pixel_multiplier = 3;  // How many pixels is one x and y coordinate in our sprite?
 // sprite colors
 enum class SoftwareColor {
   Black = 0,

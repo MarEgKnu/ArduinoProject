@@ -5,6 +5,14 @@ class Rectangle {
 public:
   Vector16 topLeftCorner;
   Vector16 bottomRightCorner;
+
+  bool operator== (const Rectangle& rhs) const {
+    return topLeftCorner == rhs.topLeftCorner && bottomRightCorner == rhs.bottomRightCorner;
+  }
+  bool operator!= (const Rectangle& rhs) const {
+    return !(*this == rhs);
+  }
+
   // Checks if the given x,y point is colliding with the rectangle 
   bool CollisionCheck(Vector16 point) {
     return topLeftCorner.x <= point.x && point.x <= bottomRightCorner.x &&
@@ -13,7 +21,7 @@ public:
   // Checks if the two rectangles overlap
   bool RectCollisionCheck(const Rectangle& rect) {
 
-    Serial.print("this topLeftCorner.x: ");
+    /*Serial.print("this topLeftCorner.x: ");
     Serial.print(topLeftCorner.x);
     Serial.print(" this topLeftCorner.y: ");
     Serial.print(topLeftCorner.y);
@@ -29,7 +37,7 @@ public:
     Serial.print(" rect bottomRightCorner.x: ");
     Serial.print(rect.bottomRightCorner.x);
     Serial.print(" rect bottomRightCorner.y: ");
-    Serial.println(rect.bottomRightCorner.y);
+    Serial.println(rect.bottomRightCorner.y);*/
     // adapted from https://www.geeksforgeeks.org/dsa/find-two-rectangles-overlap/
     // If one rectangle is on left side of other
     if (topLeftCorner.x > rect.bottomRightCorner.x || rect.topLeftCorner.x > bottomRightCorner.x)
