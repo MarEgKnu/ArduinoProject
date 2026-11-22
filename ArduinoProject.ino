@@ -75,11 +75,6 @@ const int heartMidpointY = screenSizeY / 2;
 const int heartDrawPosX = heartMidpointX - (heartSizeX * pixel_multiplier / 2);
 const int heartDrawPosY = heartMidpointY - (heartSizeY * pixel_multiplier / 2);
 
-int bulletDrawPosX;
-int bulletDrawPosY;
-
-int oldBulletPosX;
-int oldBulletPosY;
 
 // How far the shield should be from the player object.
 const int shieldOffsetFromPlayer = 6;
@@ -91,16 +86,9 @@ unsigned long lastUpdate = 0;
 const int updateInterval = 32;
 
 
-//container to keep track of active bullets.
-EntityContainer<Bullet, 8> bullets = {};
-// array of bullets to be deleted (removed from the screen)
-SizedArray<Bullet, 8> deletedBullets = {};
 
-// last new bullet
+// last new bullet spawned
 unsigned long lastBullet;
-
-// last bullet position update
-unsigned long lastBulletUpdate;
 
 // speed of bullet spawn and bullet speed (we use interrupt to tweak this)
 int bulletRate = 750;
@@ -108,20 +96,16 @@ int bulletSpeed = 5;
 // Num frames per second
 const int frameRate = 30;
 const int msPerFrame = 1000 / frameRate; 
-int lastFrame = 0;
-
-// self explanatory
-int bulletDirection;
-
+unsigned long lastFrame = 0;
 
 //Gamestate variables
 
+//container to keep track of active bullets.
+EntityContainer<Bullet, 8> bullets = {};
+// array of bullets to be deleted (removed from the screen)
+SizedArray<Bullet, 8> deletedBullets = {};
 // how many hits the player can take. can be changed from menu eventually
 int health = 1;
-
-int counter;
-
-int bulletArray = 0;
 
 uint32_t currentScore = 0; // current score for player
 bool scoreHasChanged = false; // flag for when the score changes, and drawing a new counter is needed
