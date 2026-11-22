@@ -395,21 +395,11 @@ void loop() {
             }
         }
       }
-      static bool test = false;
 
-      // //spawns new bullet after millis exceeds bulletrate. assign direction, type and array to it
-      /*if (millis() - lastBullet >= bulletRate) {
+      //spawns new bullet after millis exceeds bulletrate. assign direction, type and array to it
+      if (millis() - lastBullet >= bulletRate) {
         BulletDirection bulletDirection = BulletDirection(random(0, 4));
         bullets[bulletArray] = InitBullet(bulletDirection, BulletType::Normal);
-                                                                      // 1 = active. 0 = inactive (skips the for loop below)
-        bulletArray = (bulletArray + 1) % 8;
-        lastBullet = millis();
-      }*/
-      if (!test) {
-        test = true
-        BulletDirection bulletDirection = BulletDirection(random(0, 4));
-        bullets[bulletArray] = InitBullet(bulletDirection, BulletType::Normal);
-                                                                      // 1 = active. 0 = inactive (skips the for loop below)
         bulletArray = (bulletArray + 1) % 8;
         lastBullet = millis();
       }
@@ -417,6 +407,7 @@ void loop() {
       if (millis() - lastBulletUpdate >= bulletSpeed) {
         for (int i = 0; i < 8; i++) {
             // Remove all current bullet draws first thing
+            if (!bullets[i].isActive) continue;
             const Sprite<bulletSizeX, bulletSizeY>& bulletSprite = GetBulletTypeSprite(bullets[i].type);
             Rectangle bulletBoundingBox = bulletSprite.GetBoundingBox(bullets[i].position.x,bullets[i].position.y);   
             drawRectangle(bulletBoundingBox, SoftwareColor::Black);
@@ -425,9 +416,9 @@ void loop() {
             if (!bullets[i].isActive) continue;
             updateBulletPosition(bullets[i]);
             const Sprite<bulletSizeX, bulletSizeY>& bulletSprite = GetBulletTypeSprite(bullets[i].type);
-            Rectangle bulletBoundingBox = bulletSprite.GetBoundingBox(bullets[i].position.x,bullets[i].position.y);            
+            Rectangle bulletBoundingBox = bulletSprite.GetBoundingBox(bullets[i].position.x,bullets[i].position.y);       
            
-            bool collidesWithShield = bulletBoundingBox.RectCollisionCheck(currentShieldState.currentPosition);
+            bool collidesWithShield = currentShieldState.isActive && bulletBoundingBox.RectCollisionCheck(currentShieldState.currentPosition);
             if(collidesWithShield) {
                 Serial.println("I WAS HERE");
                 bullets[i].isActive = false;  // deactivate bullet
@@ -442,7 +433,7 @@ void loop() {
                 health--;
                 tft.fillScreen(ILI9341_BLACK);
                 break;
-            }
+             }
 
           //erase old bullet position
           //tft.fillRect(oldBulletPosX, oldBulletPosY, bulletSizeX * pixel_multiplier, bulletSizeY * pixel_multiplier, ILI9341_BLACK);
