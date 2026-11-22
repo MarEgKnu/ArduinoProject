@@ -45,7 +45,7 @@ struct Sprite {
   uint8_t data[YDim][XDim];
 
   Rectangle GetBoundingBox(int x, int y) {
-    return Rectangle{.topLeftCorner = {x, y}, .bottomRightCorner = {x + XDim, y + YDim} };
+    return Rectangle{.topLeftCorner = {x, y}, .bottomRightCorner = {x + XDim * pixel_multiplier, y + YDim * pixel_multiplier} };
   }
 
   Sprite GetMirroredSprite() const {

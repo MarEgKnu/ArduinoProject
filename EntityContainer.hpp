@@ -27,7 +27,7 @@ public:
     return _items.Size();
   }
 
-  // Adds an item to the container, and returns the index to it. Returns -1 if the item could not be added due to lack of space
+  // Adds an item to the container, and returns the index to it. Returns INVALID_INDEX if the item could not be added due to lack of space
   int16_t Add(const T& item) {
     // Check if the container can hold anymore things
     if(_items.Size() == MaxSize) {
@@ -62,9 +62,8 @@ public:
       return false;
     }
   }
-  // Attempts to delete the given index. Returns true if it was sucessfully deleted, and false if the index is invalid and was not deleted
-  bool Delete(int16_t index) {
-    if(IndexValid(index)) {
+  // deletes the given index. Must be a valid index
+  void DeleteUnsafe(int16_t index) {
       uint16_t unsigned_index = uint16_t(index);
        // If the index is valid, push the index into the queue of free indicies, then pop the array back one element if it is the front element, otherwise set the slot to be free
       _freeQueue.PushBack(unsigned_index);
@@ -75,6 +74,11 @@ public:
         _items[unsigned_index].item = {};
         _items[unsigned_index].isFree = true;
       }
+  }
+  // Attempts to delete the given index. Returns true if it was sucessfully deleted, and false if the index is invalid and was not deleted
+  bool Delete(int16_t index) {
+    if(IndexValid(index)) {
+      DeleteUnsafe(index);
       return true;
     }
     else {

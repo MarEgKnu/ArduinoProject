@@ -3,6 +3,7 @@
 #include "Sprite.hpp"
 #include "Shapes.hpp"
 #include "SizedArray.hpp"
+#include "EntityContainer.hpp"
 
 enum class Direction : uint8_t {
   None = 4,
@@ -90,8 +91,8 @@ unsigned long lastUpdate = 0;
 const int updateInterval = 32;
 
 
-//array to keep track of active bullets.
-Bullet bullets[8];
+//container to keep track of active bullets.
+EntityContainer<Bullet, 8> bullets = {};
 // array of bullets to be deleted (removed from the screen)
 SizedArray<Bullet, 8> deletedBullets = {};
 
@@ -244,8 +245,8 @@ void drawRectangle(const Rectangle& rectangle, SoftwareColor color) {
   tft.fillRect(
     xStart,
     yStart,
-    xSize * pixel_multiplier,
-    ySize * pixel_multiplier,
+    xSize,
+    ySize,
     hrwdColor);
 }
 
@@ -266,9 +267,8 @@ void drawSprite(int x, int y, const Sprite<XDim, YDim>& sprite) {
 
 void clearOldSpritesFromScreen() {
     // Remove bullets with a diffrent position than last update
-    for (int i = 0; i < 8; i++) {
-        if (!bullets[i].isActive) continue;
-        const auto& bullet = bullets[i];
+    for (int i = 0; i < bullets.Size(); i++) {
+        const auto& bullet = bullets.Get(i);
         if(bullet.lastPosition != bullet.position) {
             const Sprite<bulletSizeX, bulletSizeY>& bulletSprite = GetBulletTypeSprite(bullet.type);
             Rectangle bulletBoundingBox = bulletSprite.GetBoundingBox(bullet.lastPosition.x, bullet.lastPosition.y);   
@@ -333,9 +333,8 @@ void processJoystickInput(Direction joystickDirection) {
 
 void drawSpritesToScreen() {
     // draw bullets
-    for (int i = 0; i < 8; i++) {
-        if (!bullets[i].isActive) continue;
-        const auto& bullet = bullets[i];
+    for (int i = 0; i < bullets.Size(); i++) {
+        const auto& bullet = bullets.Get(i);
         drawSprite(bullet.position.x, bullet.position.y, bulletNormal);
     }
     const auto& shield = currentShieldState;
@@ -445,8 +444,9 @@ void loop() {
   // game loop
   while (health > 0) {
     // Check if it's time for a game state update
-    if (millis() - lastUpdate >= updateInterval) {
-        lastUpdate = millis();
+    int miliseconds = millis();
+    if (miliseconds - lastUpdate >= updateInterval) {
+        lastUpdate = miliseconds;
 
         // Get direction of the joystick
         Direction joystickDirection = getJoystickDirection();
@@ -456,23 +456,22 @@ void loop() {
             processJoystickInput(joystickDirection);
         }
         //spawns new bullet after millis exceeds bulletrate. assign direction, type and array to it
-        if (millis() - lastBullet >= bulletRate) {
+        if (miliseconds - lastBullet >= bulletRate) {
             BulletDirection bulletDirection = BulletDirection(random(0, 4));
-            bullets[bulletArray] = InitBullet(bulletDirection, BulletType::Normal);
-            bulletArray = (bulletArray + 1) % 8;
-            lastBullet = millis();
+            // If not enough space, it will not insert it
+            bullets.Add(InitBullet(bulletDirection, BulletType::Normal));
+            lastBullet = miliseconds;
         }
-        for (int i = 0; i < 8; i++) {
-            if (!bullets[i].isActive) continue;
-            auto& bullet = bullets[i];
+        for (int i = 0; i < bullets.Size(); i++) {
+            auto& bullet = bullets.Get(i);
             updateBulletPosition(bullet);
             const Sprite<bulletSizeX, bulletSizeY>& bulletSprite = GetBulletTypeSprite(bullet.type);
             Rectangle bulletBoundingBox = bulletSprite.GetBoundingBox(bullet.position.x, bullet.position.y);       
             
             bool collidesWithShield = currentShieldState.direction != Direction::None && bulletBoundingBox.RectCollisionCheck(currentShieldState.currentPosition);
             if(collidesWithShield) {
-                bullets[i].isActive = false;  // deactivate bullet
-                deletedBullets.PushBack(bullets[i]);
+                deletedBullets.PushBack(bullet);
+                bullets.DeleteUnsafe(i);
                 setNewScore(currentScore + 1);
                 continue;
             }
@@ -486,8 +485,8 @@ void loop() {
         }
     }
     // Render things to the screen if it's time for a frame update
-    if(millis() - lastFrame >= msPerFrame) {
-        lastFrame = millis();
+    if(miliseconds - lastFrame >= msPerFrame) {
+        lastFrame = miliseconds;
         // Clear old sprites
         clearOldSpritesFromScreen();
         // then draw the new ones
