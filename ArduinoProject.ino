@@ -5,6 +5,12 @@
 #include "SizedArray.hpp"
 #include "EntityContainer.hpp"
 
+enum menuItem {
+  Play,
+  Difficulty,
+  Leaderboard,
+};
+
 enum class Direction : uint8_t {
   None = 4,
   Left = 0,
@@ -21,24 +27,24 @@ enum class BulletDirection : uint8_t {
 };
 
 enum class BulletType : uint8_t {
-    Normal,
-    SlowHighDamage,
-    FastLowDamage,
-    NoBlock
+  Normal,
+  SlowHighDamage,
+  FastLowDamage,
+  NoBlock
 };
 
 struct ShieldState {
-    Direction direction = Direction::None;
-    Rectangle lastPosition = {-1, -1};
-    Rectangle currentPosition{0, 0};
+  Direction direction = Direction::None;
+  Rectangle lastPosition = { -1, -1 };
+  Rectangle currentPosition{ 0, 0 };
 };
 
 struct Bullet {
-    Vector16 lastPosition = {-1, -1}; // this value should be negative when it is just been spawned in, and thus does not have a last position
-    Vector16 position = {0,0};
-    BulletDirection direction = BulletDirection::Down;
-    BulletType type = BulletType::Normal;
-    bool isActive = false;
+  Vector16 lastPosition = { -1, -1 };  // this value should be negative when it is just been spawned in, and thus does not have a last position
+  Vector16 position = { 0, 0 };
+  BulletDirection direction = BulletDirection::Down;
+  BulletType type = BulletType::Normal;
+  bool isActive = false;
 };
 
 // Define the TFT pins
@@ -95,10 +101,38 @@ int bulletRate = 750;
 int bulletSpeed = 5;
 // Num frames per second
 const int frameRate = 30;
-const int msPerFrame = 1000 / frameRate; 
+const int msPerFrame = 1000 / frameRate;
 unsigned long lastFrame = 0;
 
 //Gamestate variables
+
+// boolean to keep track of menu status. inital value true because we want the menu to show when starting
+bool menuScreen = true;
+
+// boolean to keep track of difficulty screen
+bool diffScreen = false;
+
+// boolean to keep track of leaderboard screen
+bool lbScreen = false;
+
+// cursor position
+int cursorPosition = 0;
+
+int lastCursorPosition = -1;
+
+Direction lastMenuDirection = Direction::None;
+
+// menu items
+const char* menuOptions[3]{
+  "Play",
+  "Difficulty",
+  "Leaderboard"
+};
+
+// length of menu array
+int menuScreens = sizeof(menuOptions) / sizeof(menuOptions[0]);
+
+
 
 //container to keep track of active bullets.
 EntityContainer<Bullet, 8> bullets = {};
@@ -107,8 +141,8 @@ SizedArray<Bullet, 8> deletedBullets = {};
 // how many hits the player can take. can be changed from menu eventually
 int health = 1;
 
-uint32_t currentScore = 0; // current score for player
-bool scoreHasChanged = false; // flag for when the score changes, and drawing a new counter is needed
+uint32_t currentScore = 0;     // current score for player
+bool scoreHasChanged = false;  // flag for when the score changes, and drawing a new counter is needed
 
 // The current position (and bounding box) of the player shield, and a bool determining if it is currently active or not
 ShieldState currentShieldState{};
@@ -170,16 +204,16 @@ const Sprite<bulletSizeX, bulletSizeY> bulletFastLowDamage = {
 };
 
 const Sprite<bulletSizeX, bulletSizeY>& GetBulletTypeSprite(BulletType type) {
-    switch(type) {
-        case BulletType::Normal:
-            return bulletNormal;
-        case BulletType::NoBlock:
-            return bulletNoBlock;
-        case BulletType::SlowHighDamage:
-            return bulletSlowHighDamage;
-        case BulletType::FastLowDamage:
-            return bulletFastLowDamage;
-    }
+  switch (type) {
+    case BulletType::Normal:
+      return bulletNormal;
+    case BulletType::NoBlock:
+      return bulletNoBlock;
+    case BulletType::SlowHighDamage:
+      return bulletSlowHighDamage;
+    case BulletType::FastLowDamage:
+      return bulletFastLowDamage;
+  }
 }
 
 Sprite<shieldSizeX, shieldSizeY> shieldVertical = {
@@ -250,156 +284,198 @@ void drawSprite(int x, int y, const Sprite<XDim, YDim>& sprite) {
 }
 
 void clearOldSpritesFromScreen() {
-    // Remove bullets with a diffrent position than last update
-    for (int i = 0; i < bullets.Size(); i++) {
-        const auto& bullet = bullets.Get(i);
-        if(bullet.lastPosition != bullet.position) {
-            const Sprite<bulletSizeX, bulletSizeY>& bulletSprite = GetBulletTypeSprite(bullet.type);
-            Rectangle bulletBoundingBox = bulletSprite.GetBoundingBox(bullet.lastPosition.x, bullet.lastPosition.y);   
-            drawRectangle(bulletBoundingBox, SoftwareColor::Black);
-        }
+  // Remove bullets with a diffrent position than last update
+  for (int i = 0; i < bullets.Size(); i++) {
+    const auto& bullet = bullets.Get(i);
+    if (bullet.lastPosition != bullet.position) {
+      const Sprite<bulletSizeX, bulletSizeY>& bulletSprite = GetBulletTypeSprite(bullet.type);
+      Rectangle bulletBoundingBox = bulletSprite.GetBoundingBox(bullet.lastPosition.x, bullet.lastPosition.y);
+      drawRectangle(bulletBoundingBox, SoftwareColor::Black);
     }
-    // Remove all bullets in the deletedBullets array and clear it
-    for(uint8_t idx = 0;idx < deletedBullets.Size();idx++) {
-        const auto& bullet = deletedBullets[idx];
-        const Sprite<bulletSizeX, bulletSizeY>& bulletSprite = GetBulletTypeSprite(bullet.type);
-        Rectangle bulletBoundingBox = bulletSprite.GetBoundingBox(bullet.lastPosition.x, bullet.lastPosition.y);   
-        drawRectangle(bulletBoundingBox, SoftwareColor::Black);
-    }
-    deletedBullets.Clear();
-    // Remove old shield
-    if(currentShieldState.lastPosition != currentShieldState.currentPosition) {
-        drawRectangle(currentShieldState.lastPosition, SoftwareColor::Black);
-    }
-    // The player cannot move so no need to un-draw that
+  }
+  // Remove all bullets in the deletedBullets array and clear it
+  for (uint8_t idx = 0; idx < deletedBullets.Size(); idx++) {
+    const auto& bullet = deletedBullets[idx];
+    const Sprite<bulletSizeX, bulletSizeY>& bulletSprite = GetBulletTypeSprite(bullet.type);
+    Rectangle bulletBoundingBox = bulletSprite.GetBoundingBox(bullet.lastPosition.x, bullet.lastPosition.y);
+    drawRectangle(bulletBoundingBox, SoftwareColor::Black);
+  }
+  deletedBullets.Clear();
+  // Remove old shield
+  if (currentShieldState.lastPosition != currentShieldState.currentPosition) {
+    drawRectangle(currentShieldState.lastPosition, SoftwareColor::Black);
+  }
+  // The player cannot move so no need to un-draw that
 }
 
 void processJoystickInput(Direction joystickDirection) {
-    // save last shield position. Its ok if they are the same
-    currentShieldState.lastPosition = currentShieldState.currentPosition;
-    switch (joystickDirection) {
-        // Set the shield bounding box, calculate the exact coordinates where it should appear and draw it on the screen
-        case Direction::Left:
-        {
-            int x = (heartDrawPosX)-shieldOffsetFromPlayer * pixel_multiplier;
-            int y = (heartDrawPosY)-shieldSizeY / 2;
-            currentShieldState.currentPosition = shieldVertical.GetBoundingBox(x, y);
-            break;
-        }
-        case Direction::Right:
-        {
-            int x = (heartDrawPosX + heartSizeX * pixel_multiplier) + shieldOffsetFromPlayer * pixel_multiplier - shieldSizeX * pixel_multiplier;
-            int y = (heartDrawPosY)-shieldSizeY / 2;
-            currentShieldState.currentPosition = shieldVertical.GetBoundingBox(x, y);
-            break;
-        }
-        case Direction::Up:
-        {
-            int x = (heartDrawPosX)-shieldSizeX * pixel_multiplier / 2;
-            int y = (heartDrawPosY)-shieldOffsetFromPlayer * pixel_multiplier;
-            currentShieldState.currentPosition = shieldHorizontal.GetBoundingBox(x, y);
-            break;
-        }
-        case Direction::Down:
-        {
-            int x = (heartDrawPosX)-shieldSizeX * pixel_multiplier / 2;
-            int y = (heartDrawPosY + heartSizeY * pixel_multiplier) + shieldOffsetFromPlayer * pixel_multiplier - shieldSizeX * pixel_multiplier;
-            currentShieldState.currentPosition = shieldHorizontal.GetBoundingBox(x, y);
-            break;
-        }
-        case Direction::None:
-        {
-            break;
-        }
+  // save last shield position. Its ok if they are the same
+  currentShieldState.lastPosition = currentShieldState.currentPosition;
+  switch (joystickDirection) {
+    // Set the shield bounding box, calculate the exact coordinates where it should appear and draw it on the screen
+    case Direction::Left:
+      {
+        int x = (heartDrawPosX)-shieldOffsetFromPlayer * pixel_multiplier;
+        int y = (heartDrawPosY)-shieldSizeY / 2;
+        currentShieldState.currentPosition = shieldVertical.GetBoundingBox(x, y);
+        break;
+      }
+    case Direction::Right:
+      {
+        int x = (heartDrawPosX + heartSizeX * pixel_multiplier) + shieldOffsetFromPlayer * pixel_multiplier - shieldSizeX * pixel_multiplier;
+        int y = (heartDrawPosY)-shieldSizeY / 2;
+        currentShieldState.currentPosition = shieldVertical.GetBoundingBox(x, y);
+        break;
+      }
+    case Direction::Up:
+      {
+        int x = (heartDrawPosX)-shieldSizeX * pixel_multiplier / 2;
+        int y = (heartDrawPosY)-shieldOffsetFromPlayer * pixel_multiplier;
+        currentShieldState.currentPosition = shieldHorizontal.GetBoundingBox(x, y);
+        break;
+      }
+    case Direction::Down:
+      {
+        int x = (heartDrawPosX)-shieldSizeX * pixel_multiplier / 2;
+        int y = (heartDrawPosY + heartSizeY * pixel_multiplier) + shieldOffsetFromPlayer * pixel_multiplier - shieldSizeX * pixel_multiplier;
+        currentShieldState.currentPosition = shieldHorizontal.GetBoundingBox(x, y);
+        break;
+      }
+    case Direction::None:
+      {
+        break;
+      }
+  }
+  currentShieldState.direction = joystickDirection;
+}
+
+void displayMenu() {
+  Direction currentDir = getJoystickDirection();
+
+  if (currentDir != lastMenuDirection) {
+
+    if (currentDir == Direction::Up && cursorPosition > 0) {
+      cursorPosition--;
+    } else if (currentDir == Direction::Down && cursorPosition < menuScreens - 1) {
+      cursorPosition++;
     }
-    currentShieldState.direction = joystickDirection;
+
+    lastMenuDirection = currentDir;
+  }
+
+  if (cursorPosition != lastCursorPosition) {
+    tft.setTextColor(ILI9341_WHITE);
+    tft.setTextSize(2);
+
+    // draw the menu items only once when the menu first opens
+    if (lastCursorPosition == -1) {
+      for (int a = 0; a < menuScreens; a++) {
+        tft.setCursor(0, 50 + (a * 60));
+        tft.print(menuOptions[a]);
+      }
+    }
+
+    // only update the small cursor spot next to each item
+    for (int a = 0; a < menuScreens; a++) {
+      int textWidth = strlen(menuOptions[a]) * 12;  // 6px base width * textSize 2
+      int yPos = 50 + (a * 60);
+
+      if (cursorPosition == a) {
+        tft.setCursor(textWidth, yPos);
+        tft.print(" <");
+      } else {
+        tft.fillRect(textWidth, yPos, 24, 16, ILI9341_BLACK);
+      }
+    }
+    lastCursorPosition = cursorPosition;
+  }
 }
 
 void drawSpritesToScreen() {
-    // draw bullets
-    for (int i = 0; i < bullets.Size(); i++) {
-        const auto& bullet = bullets.Get(i);
-        drawSprite(bullet.position.x, bullet.position.y, bulletNormal);
-    }
-    const auto& shield = currentShieldState;
-    // draw shield
-    switch(shield.direction) {
-        case Direction::Left:
-        case Direction::Right:
-            drawSprite(shield.currentPosition.topLeftCorner.x, shield.currentPosition.topLeftCorner.y, shieldVertical);
-            break;
-        case Direction::Up:
-        case Direction::Down:
-            drawSprite(shield.currentPosition.topLeftCorner.x, shield.currentPosition.topLeftCorner.y, shieldHorizontal);
-            break;
-        case Direction::None:
-            break;
-    }
-    // Draw the player
-      drawSprite(heartDrawPosX, heartDrawPosY, heart);
+  // draw bullets
+  for (int i = 0; i < bullets.Size(); i++) {
+    const auto& bullet = bullets.Get(i);
+    drawSprite(bullet.position.x, bullet.position.y, bulletNormal);
+  }
+  const auto& shield = currentShieldState;
+  // draw shield
+  switch (shield.direction) {
+    case Direction::Left:
+    case Direction::Right:
+      drawSprite(shield.currentPosition.topLeftCorner.x, shield.currentPosition.topLeftCorner.y, shieldVertical);
+      break;
+    case Direction::Up:
+    case Direction::Down:
+      drawSprite(shield.currentPosition.topLeftCorner.x, shield.currentPosition.topLeftCorner.y, shieldHorizontal);
+      break;
+    case Direction::None:
+      break;
+  }
+  // Draw the player
+  drawSprite(heartDrawPosX, heartDrawPosY, heart);
 }
 
 void updateBulletPosition(Bullet& bullet) {
-    // store last position
-    bullet.lastPosition = bullet.position;
-    switch(bullet.direction) {
-        case BulletDirection::Left:
-            bullet.position.x += bulletSpeed;
-            break;
-        case BulletDirection::Right:
-            bullet.position.x -= bulletSpeed;
-            break;
-        case BulletDirection::Up:
-            bullet.position.y += bulletSpeed;
-            break;
-        case BulletDirection::Down:
-            bullet.position.y -= bulletSpeed;
-            break;
-    }
+  // store last position
+  bullet.lastPosition = bullet.position;
+  switch (bullet.direction) {
+    case BulletDirection::Left:
+      bullet.position.x += bulletSpeed;
+      break;
+    case BulletDirection::Right:
+      bullet.position.x -= bulletSpeed;
+      break;
+    case BulletDirection::Up:
+      bullet.position.y += bulletSpeed;
+      break;
+    case BulletDirection::Down:
+      bullet.position.y -= bulletSpeed;
+      break;
+  }
 }
 
 Bullet InitBullet(BulletDirection direction, BulletType type) {
-    Vector16 position;
-    switch(direction) {
-        case BulletDirection::Left:
-            position.x = playAreaStartX;
-            position.y = heartMidpointY - (bulletSizeY * pixel_multiplier / 2);
-            break;
-        case BulletDirection::Right:
-            position.x = playAreaEndX - bulletSizeX; // offset since it draws towards the right
-            position.y = heartMidpointY - (bulletSizeY * pixel_multiplier / 2);
-            break;
-        case BulletDirection::Up:
-            position.x = heartMidpointX - (bulletSizeX * pixel_multiplier / 2);
-            position.y = playAreaStartY;
-            break;
-        case BulletDirection::Down:
-            position.x = heartMidpointX - (bulletSizeX * pixel_multiplier / 2);
-            position.y = playAreaEndY - bulletSizeY;
-            break;
-    }
-    Bullet bullet{};
-    bullet.lastPosition = Vector16{-1, -1};
-    bullet.position = position;
-    bullet.direction = direction;
-    bullet.type = type;
-    bullet.isActive = true;
-    return bullet;
+  Vector16 position;
+  switch (direction) {
+    case BulletDirection::Left:
+      position.x = playAreaStartX;
+      position.y = heartMidpointY - (bulletSizeY * pixel_multiplier / 2);
+      break;
+    case BulletDirection::Right:
+      position.x = playAreaEndX - bulletSizeX;  // offset since it draws towards the right
+      position.y = heartMidpointY - (bulletSizeY * pixel_multiplier / 2);
+      break;
+    case BulletDirection::Up:
+      position.x = heartMidpointX - (bulletSizeX * pixel_multiplier / 2);
+      position.y = playAreaStartY;
+      break;
+    case BulletDirection::Down:
+      position.x = heartMidpointX - (bulletSizeX * pixel_multiplier / 2);
+      position.y = playAreaEndY - bulletSizeY;
+      break;
+  }
+  Bullet bullet{};
+  bullet.lastPosition = Vector16{ -1, -1 };
+  bullet.position = position;
+  bullet.direction = direction;
+  bullet.type = type;
+  bullet.isActive = true;
+  return bullet;
 }
 void setNewScore(uint32_t newScore) {
-    currentScore = newScore;
-    scoreHasChanged = true;
+  currentScore = newScore;
+  scoreHasChanged = true;
 }
 
 void drawScoreCounterDisplay() {
-    if(scoreHasChanged) {
-        scoreHasChanged = false;
-        tft.fillRect(240, 0, 40, 40, ILI9341_BLACK);
-        tft.setCursor(240, 0);
-        tft.setTextColor(ILI9341_WHITE);
-        tft.setTextSize(2);
-        tft.print(currentScore);
-    }
+  if (scoreHasChanged) {
+    scoreHasChanged = false;
+    tft.fillRect(240, 0, 40, 40, ILI9341_BLACK);
+    tft.setCursor(240, 0);
+    tft.setTextColor(ILI9341_WHITE);
+    tft.setTextSize(2);
+    tft.print(currentScore);
+  }
 }
 
 void setup() {
@@ -417,66 +493,79 @@ void setup() {
 
   // Set screen orientation
   tft.setRotation(1);
-
-  tft.fillScreen(ILI9341_WHITE);
-  tft.fillRect(heartMidpointX - (playAreaX / 2), heartMidpointY - (playAreaY / 2), playAreaX, playAreaY, ILI9341_BLACK);
-  tft.fillRect(20, 30, 10, 10, ILI9341_RED);
-  tft.fillRect(280, 30, 10, 10, ILI9341_RED);
 }
 
 void loop() {
+  //menu screen
+  while (menuScreen) {
+    if (digitalRead(SEL_PIN) == LOW && cursorPosition == Play) {
+      // initalize playscreen
+      tft.fillScreen(ILI9341_WHITE);
+      tft.fillRect(heartMidpointX - (playAreaX / 2), heartMidpointY - (playAreaY / 2), playAreaX, playAreaY, ILI9341_BLACK);
+      tft.fillRect(20, 30, 10, 10, ILI9341_RED);
+      tft.fillRect(280, 30, 10, 10, ILI9341_RED);
+      menuScreen = false;
+    }
+    displayMenu();
+    //difficulty
+    //leaderboard
+  }
+
   // game loop
   while (health > 0) {
+
     // Check if it's time for a game state update
     int miliseconds = millis();
     if (miliseconds - lastUpdate >= updateInterval) {
-        lastUpdate = miliseconds;
+      lastUpdate = miliseconds;
 
-        // Get direction of the joystick
-        Direction joystickDirection = getJoystickDirection();
+      // Get direction of the joystick
+      Direction joystickDirection = getJoystickDirection();
 
-        if (joystickDirection != lastJoystickDirection) {
-            lastJoystickDirection = joystickDirection;
-            processJoystickInput(joystickDirection);
+      if (joystickDirection != lastJoystickDirection) {
+        lastJoystickDirection = joystickDirection;
+        processJoystickInput(joystickDirection);
+      }
+      //spawns new bullet after millis exceeds bulletrate. assign direction, type and array to it
+      if (miliseconds - lastBullet >= bulletRate) {
+        BulletDirection bulletDirection = BulletDirection(random(0, 4));
+        // If not enough space, it will not insert it
+        bullets.Add(InitBullet(bulletDirection, BulletType::Normal));
+        lastBullet = miliseconds;
+      }
+      for (int i = 0; i < bullets.Size(); i++) {
+        auto& bullet = bullets.Get(i);
+        updateBulletPosition(bullet);
+        const Sprite<bulletSizeX, bulletSizeY>& bulletSprite = GetBulletTypeSprite(bullet.type);
+        Rectangle bulletBoundingBox = bulletSprite.GetBoundingBox(bullet.position.x, bullet.position.y);
+
+        bool collidesWithShield = currentShieldState.direction != Direction::None && bulletBoundingBox.RectCollisionCheck(currentShieldState.currentPosition);
+        if (collidesWithShield) {
+          deletedBullets.PushBack(bullet);
+          bullets.DeleteUnsafe(i);
+          setNewScore(currentScore + 1);
+          continue;
         }
-        //spawns new bullet after millis exceeds bulletrate. assign direction, type and array to it
-        if (miliseconds - lastBullet >= bulletRate) {
-            BulletDirection bulletDirection = BulletDirection(random(0, 4));
-            // If not enough space, it will not insert it
-            bullets.Add(InitBullet(bulletDirection, BulletType::Normal));
-            lastBullet = miliseconds;
+        Rectangle playerBoundingBox = bulletSprite.GetBoundingBox(heartDrawPosX, heartDrawPosY);
+        bool collidesWithPlayer = bulletBoundingBox.RectCollisionCheck(playerBoundingBox);
+        if (collidesWithPlayer) {
+          health--;
+          break;
         }
-        for (int i = 0; i < bullets.Size(); i++) {
-            auto& bullet = bullets.Get(i);
-            updateBulletPosition(bullet);
-            const Sprite<bulletSizeX, bulletSizeY>& bulletSprite = GetBulletTypeSprite(bullet.type);
-            Rectangle bulletBoundingBox = bulletSprite.GetBoundingBox(bullet.position.x, bullet.position.y);       
-            
-            bool collidesWithShield = currentShieldState.direction != Direction::None && bulletBoundingBox.RectCollisionCheck(currentShieldState.currentPosition);
-            if(collidesWithShield) {
-                deletedBullets.PushBack(bullet);
-                bullets.DeleteUnsafe(i);
-                setNewScore(currentScore + 1);
-                continue;
-            }
-            Rectangle playerBoundingBox = bulletSprite.GetBoundingBox(heartDrawPosX, heartDrawPosY);        
-            bool collidesWithPlayer = bulletBoundingBox.RectCollisionCheck(playerBoundingBox);
-            if(collidesWithPlayer) {
-                health--;
-                tft.fillScreen(ILI9341_BLACK);
-                break;
-            }
-        }
+      }
     }
     // Render things to the screen if it's time for a frame update
-    if(miliseconds - lastFrame >= msPerFrame) {
-        lastFrame = miliseconds;
-        // Clear old sprites
-        clearOldSpritesFromScreen();
-        // then draw the new ones
-        drawSpritesToScreen();
-        // Display score counter
-        drawScoreCounterDisplay();
+    if (miliseconds - lastFrame >= msPerFrame) {
+      lastFrame = miliseconds;
+      // Clear old sprites
+      clearOldSpritesFromScreen();
+      // then draw the new ones
+      drawSpritesToScreen();
+      // Display score counter
+      drawScoreCounterDisplay();
+    }
+    if (health == 0) {
+      tft.fillScreen(ILI9341_BLACK);
     }
   }
 
