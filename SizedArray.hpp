@@ -11,7 +11,6 @@ public:
 	void PushBack(const T& item) {
 			_data[_sizeUsed] = item;
 			_sizeUsed++;
-			return true;
 	}
 	// Remove item from front of array, and return it. Must check that size() is not zero before calling
 	T PopBack() {
@@ -38,7 +37,9 @@ public:
 			}
 		}
 		_sizeUsed = newSize;
-
+	}
+	void Clear() {
+		Resize(0);
 	}
 	// Indexes the array
 	T& operator[](uint8_t index) {

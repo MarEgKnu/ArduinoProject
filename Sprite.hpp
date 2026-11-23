@@ -1,10 +1,14 @@
 #pragma once
 #include "Shapes.hpp"
+
+const int pixel_multiplier = 3;  // How many pixels is one x and y coordinate in our sprite?
 // sprite colors
 enum class SoftwareColor {
   Black = 0,
   Red = 1,
-  White = 2
+  White = 2,
+  Green = 3,
+  Orange = 4
 };
 
 int SoftwareColorToHardwareColor(SoftwareColor color) {
@@ -20,6 +24,14 @@ int SoftwareColorToHardwareColor(SoftwareColor color) {
         return ILI9341_WHITE;
         break;
     }
+    case SoftwareColor::Green: {
+        return ILI9341_GREEN;
+        break;
+    }
+     case SoftwareColor::Orange: {
+        return ILI9341_ORANGE;
+        break;
+    }
     default:{
         return ILI9341_BLACK;
         break;
@@ -33,7 +45,7 @@ struct Sprite {
   uint8_t data[YDim][XDim];
 
   Rectangle GetBoundingBox(int x, int y) {
-    return Rectangle{.topLeftCorner = {x, y}, .bottomRightCorner = {x + XDim, y + YDim} };
+    return Rectangle{.topLeftCorner = {x, y}, .bottomRightCorner = {x + XDim * pixel_multiplier, y + YDim * pixel_multiplier} };
   }
 
   Sprite GetMirroredSprite() const {
