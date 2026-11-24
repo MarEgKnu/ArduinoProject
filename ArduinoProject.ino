@@ -294,15 +294,18 @@ void drawRectangle(const Rectangle& rectangle, SoftwareColor color) {
 }
 
 template<uint8_t XDim, uint8_t YDim>
-void drawSprite(int x, int y, const Sprite<XDim, YDim>& sprite) {
+void drawSprite(int x, int y, const Sprite<XDim, YDim>& sprite, int pixelOverride = 0) {
+  // in case we want to use a different pixel multi (like in logo)
+  int scale = (pixelOverride > 0) ? pixelOverride : pixel_multiplier;
+
   for (int row = 0; row < YDim; row++) {
     for (int col = 0; col < XDim; col++) {
       int colorID = SoftwareColorToHardwareColor(SoftwareColor(sprite.data[row][col]));
       tft.fillRect(
-        x + col * pixel_multiplier,
-        y + row * pixel_multiplier,
-        pixel_multiplier,
-        pixel_multiplier,
+        x + col * scale,
+        y + row * scale,
+        scale,
+        scale,
         colorID);
     }
   }
@@ -535,7 +538,7 @@ void exitMenu(bool& menu) {
   menu = false;
   lastCursorPosition = -1;
   cursorPosition = 0;
-  tft.fillScreen(ILI9341_BLACK);
+  tft.fillRect(0, 0, 160, 240, ILI9341_BLACK);
 }
 
 void setup() {
@@ -553,15 +556,18 @@ void setup() {
   if (health < 1 || health > 3) {
     health = 3;
   }
-
   // Start the display
   tft.begin();
 
   // Set screen orientation
   tft.setRotation(1);
+
+  // draw logo
+  drawSprite(192, 72, heart, 12);
 }
 
 void loop() {
+
   //menu screen
   while (menuScreen) {
     if (mainMenu) {
