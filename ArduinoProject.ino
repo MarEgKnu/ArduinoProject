@@ -4,11 +4,18 @@
 #include "Shapes.hpp"
 #include "SizedArray.hpp"
 #include "EntityContainer.hpp"
+#include <EEPROM.h>
 
 enum menuItem {
   Play,
   Difficulty,
   Leaderboard,
+};
+
+enum difficulty {
+  Easy,
+  Medium,
+  Hard,
 };
 
 enum class Direction : uint8_t {
@@ -106,14 +113,23 @@ unsigned long lastFrame = 0;
 
 //Gamestate variables
 
-// boolean to keep track of menu status. inital value true because we want the menu to show when starting
+//booleans to keep track of which screens we're in currently - mainMenu is initally true because its the first menu we want to display
+
 bool menuScreen = true;
 
-// boolean to keep track of difficulty screen
-bool diffScreen = false;
+bool mainMenu = true;
 
-// boolean to keep track of leaderboard screen
+bool difficultyMenu = false;
+
 bool lbScreen = false;
+
+// self explanatory
+bool healthHasChanged = false;
+
+// invisibility frames because right now one bullet can keep colliding with the heart which activates health-- over and over
+unsigned long lastHit = 0;
+
+const int damageCooldown = 1000;
 
 // cursor position
 int cursorPosition = 0;
@@ -122,24 +138,33 @@ int lastCursorPosition = -1;
 
 Direction lastMenuDirection = Direction::None;
 
-// menu items
+// menu screen items
 const char* menuOptions[3]{
   "Play",
   "Difficulty",
   "Leaderboard"
 };
 
+// difficulty screen items
+const char* difficultyOptions[3]{
+  "Easy",
+  "Medium",
+  "Hard"
+};
+
 // length of menu array
-int menuScreens = sizeof(menuOptions) / sizeof(menuOptions[0]);
+int menuOptionsL = sizeof(menuOptions) / sizeof(menuOptions[0]);
 
-
+// length of difficulty options
+int difficultyOptionsL = sizeof(difficultyOptions) / sizeof(difficultyOptions[0]);
 
 //container to keep track of active bullets.
 EntityContainer<Bullet, 8> bullets = {};
 // array of bullets to be deleted (removed from the screen)
 SizedArray<Bullet, 8> deletedBullets = {};
+
 // how many hits the player can take. can be changed from menu eventually
-int health = 1;
+int health = 3;
 
 uint32_t currentScore = 0;     // current score for player
 bool scoreHasChanged = false;  // flag for when the score changes, and drawing a new counter is needed
@@ -349,14 +374,14 @@ void processJoystickInput(Direction joystickDirection) {
   currentShieldState.direction = joystickDirection;
 }
 
-void displayMenu() {
+void displayMenu(const char** options, int optionsLength) {
   Direction currentDir = getJoystickDirection();
 
   if (currentDir != lastMenuDirection) {
 
     if (currentDir == Direction::Up && cursorPosition > 0) {
       cursorPosition--;
-    } else if (currentDir == Direction::Down && cursorPosition < menuScreens - 1) {
+    } else if (currentDir == Direction::Down && cursorPosition < optionsLength - 1) {
       cursorPosition++;
     }
 
@@ -369,15 +394,15 @@ void displayMenu() {
 
     // draw the menu items only once when the menu first opens
     if (lastCursorPosition == -1) {
-      for (int a = 0; a < menuScreens; a++) {
+      for (int a = 0; a < optionsLength; a++) {
         tft.setCursor(0, 50 + (a * 60));
-        tft.print(menuOptions[a]);
+        tft.print(options[a]);
       }
     }
 
     // only update the small cursor spot next to each item
-    for (int a = 0; a < menuScreens; a++) {
-      int textWidth = strlen(menuOptions[a]) * 12;  // 6px base width * textSize 2
+    for (int a = 0; a < optionsLength; a++) {
+      int textWidth = strlen(options[a]) * 12;  // 6px base width * textSize 2
       int yPos = 50 + (a * 60);
 
       if (cursorPosition == a) {
@@ -389,6 +414,21 @@ void displayMenu() {
     }
     lastCursorPosition = cursorPosition;
   }
+}
+
+// function to initialize play area
+void playArea() {
+  // play area
+  tft.fillScreen(ILI9341_WHITE);
+  tft.fillRect(heartMidpointX - (playAreaX / 2), heartMidpointY - (playAreaY / 2), playAreaX, playAreaY, ILI9341_BLACK);
+  tft.fillRect(20, 30, 10, 10, ILI9341_RED);
+  tft.fillRect(280, 30, 10, 10, ILI9341_RED);
+  // draw inital health
+  tft.setCursor(42, 0);
+  tft.setTextColor(ILI9341_WHITE);
+  tft.setTextSize(2);
+  tft.print("HP: ");
+  tft.print(health);
 }
 
 void drawSpritesToScreen() {
@@ -478,6 +518,26 @@ void drawScoreCounterDisplay() {
   }
 }
 
+// i just copy pasted the other function for score almost lo
+void displayHealth() {
+  if (healthHasChanged) {
+    healthHasChanged = false;
+    tft.fillRect(42, 0, 60, 40, ILI9341_BLACK);
+    tft.setCursor(42, 0);
+    tft.setTextColor(ILI9341_WHITE);
+    tft.setTextSize(2);
+    tft.print("HP: ");
+    tft.print(health);
+  }
+}
+// function to handle exiting screens
+void exitMenu(bool& menu) {
+  menu = false;
+  lastCursorPosition = -1;
+  cursorPosition = 0;
+  tft.fillScreen(ILI9341_BLACK);
+}
+
 void setup() {
   Serial.begin(9600);
 
@@ -487,6 +547,12 @@ void setup() {
   pinMode(vert, INPUT);
   pinMode(horz, INPUT);
   pinMode(SEL_PIN, INPUT_PULLUP);
+
+  // get the saved health value (this depends on which difficulty you chose last). default is 3 (if a difficulty hasnt been chosed yet)
+  EEPROM.get(0, health);
+  if (health < 1 || health > 3) {
+    health = 3;
+  }
 
   // Start the display
   tft.begin();
@@ -498,16 +564,35 @@ void setup() {
 void loop() {
   //menu screen
   while (menuScreen) {
-    if (digitalRead(SEL_PIN) == LOW && cursorPosition == Play) {
-      // initalize playscreen
-      tft.fillScreen(ILI9341_WHITE);
-      tft.fillRect(heartMidpointX - (playAreaX / 2), heartMidpointY - (playAreaY / 2), playAreaX, playAreaY, ILI9341_BLACK);
-      tft.fillRect(20, 30, 10, 10, ILI9341_RED);
-      tft.fillRect(280, 30, 10, 10, ILI9341_RED);
-      menuScreen = false;
+    if (mainMenu) {
+      displayMenu(menuOptions, menuOptionsL);
+      if (digitalRead(SEL_PIN) == LOW && cursorPosition == Play) {
+        playArea();
+        menuScreen = false;
+      } else if (digitalRead(SEL_PIN) == LOW && cursorPosition == Difficulty) {
+        exitMenu(mainMenu);
+        difficultyMenu = true;
+      }
     }
-    displayMenu();
-    //difficulty
+    if (difficultyMenu) {
+      displayMenu(difficultyOptions, difficultyOptionsL);
+      if (digitalRead(SEL_PIN) == LOW && cursorPosition == Easy) {
+        exitMenu(difficultyMenu);
+        health = 3;
+        EEPROM.put(0, health);
+        mainMenu = true;
+      } else if (digitalRead(SEL_PIN) == LOW && cursorPosition == Medium) {
+        exitMenu(difficultyMenu);
+        health = 2;
+        EEPROM.put(0, health);
+        mainMenu = true;
+      } else if (digitalRead(SEL_PIN) == LOW && cursorPosition == Hard) {
+        exitMenu(difficultyMenu);
+        health = 1;
+        EEPROM.put(0, health);
+        mainMenu = true;
+      }
+    }
     //leaderboard
   }
 
@@ -548,8 +633,11 @@ void loop() {
         }
         Rectangle playerBoundingBox = bulletSprite.GetBoundingBox(heartDrawPosX, heartDrawPosY);
         bool collidesWithPlayer = bulletBoundingBox.RectCollisionCheck(playerBoundingBox);
-        if (collidesWithPlayer) {
+        if (collidesWithPlayer && (millis() - lastHit >= damageCooldown)) {
           health--;
+          healthHasChanged = true;
+          displayHealth();
+          lastHit = millis();
           break;
         }
       }
@@ -569,8 +657,8 @@ void loop() {
     }
   }
 
-  tft.setCursor(110, 110);
+  tft.setCursor(90, 110);
   tft.setTextColor(ILI9341_WHITE);
   tft.setTextSize(4);
-  tft.print("Dead");
+  tft.print("Dead :(");
 }
