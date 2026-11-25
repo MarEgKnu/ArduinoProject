@@ -6,6 +6,7 @@
 #include "EntityContainer.hpp"
 #include <EEPROM.h>
 #include <TimerOne.h>
+#include "Sound.hpp"
 
 enum menuItem {
   Play,
@@ -337,9 +338,11 @@ void onPlayerHit(const Bullet& bullet, uint8_t bulletIndex) {
       uint8_t damage = bulletDamage[uint8_t(bullet.type)];
       health -= damage;
       healthHasChanged = true;
+      PlayerHitSound();
     }
     else {
       setNewScore(currentScore + 1);
+      PlayerHitNoDamageSound();
     }
     deletedBullets.PushBack(bullet);
     bullets.DeleteUnsafe(bulletIndex);
@@ -349,9 +352,11 @@ void onShieldHit(const Bullet& bullet, uint8_t bulletIndex) {
       uint8_t damage = bulletDamage[uint8_t(bullet.type)];
       health -= damage;
       healthHasChanged = true;
+      PlayerHitSound();
     }
     else {
       setNewScore(currentScore + 1);
+      PlayBlockSound();
     }
     deletedBullets.PushBack(bullet);
     bullets.DeleteUnsafe(bulletIndex);
@@ -636,6 +641,7 @@ void setup() {
 
   pinMode(vert, INPUT);
   pinMode(horz, INPUT);
+  pinMode(BuzzerPin, OUTPUT);
   pinMode(SEL_PIN, INPUT_PULLUP);
 
   // get the saved health value (this depends on which difficulty you chose last). default is 3 (if a difficulty hasnt been chosed yet)
