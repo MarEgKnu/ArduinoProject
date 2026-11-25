@@ -5,6 +5,7 @@
 #include "SizedArray.hpp"
 #include "EntityContainer.hpp"
 #include <EEPROM.h>
+#include <TimerOne.h>
 
 enum menuItem {
   Play,
@@ -154,10 +155,11 @@ bool lbScreen = false;
 // self explanatory
 bool healthHasChanged = false;
 
-// invisibility frames because right now one bullet can keep colliding with the heart which activates health-- over and over
-unsigned long lastHit = 0;
+volatile int32_t speedMultiplier = 1;
 
-const int damageCooldown = 1000;
+const int speedMultIncrease = 0.1;
+const int speedIncreaseTime = 4 * 1000 * 1000; // in microseconds
+
 
 // cursor position
 int cursorPosition = 0;
@@ -285,6 +287,12 @@ Sprite<shieldSizeX, shieldSizeY> shieldVertical = {
 };
 
 Sprite<shieldSizeY, shieldSizeX> shieldHorizontal = shieldVertical.GetRotatedSprite();
+
+void onTimerTrigger() {
+  if(!menuScreen) {
+    speedMultiplier += speedMultIncrease;
+  }
+}
 
 Direction getJoystickDirection() {
   int horizontal = analogRead(horz);
@@ -534,7 +542,10 @@ void drawSpritesToScreen() {
 void updateBulletPosition(Bullet& bullet) {
   // store last position
   bullet.lastPosition = bullet.position;
-  uint8_t speed = bulletSpeed[uint8_t(bullet.type)];
+  // Disable interupt while it is reading the variable which it will modify
+  noInterrupts();
+  uint8_t speed = bulletSpeed[uint8_t(bullet.type)] * speedMultiplier;
+  interrupts();
   switch (bullet.direction) {
     case BulletDirection::Left:
       bullet.position.x += speed;
@@ -620,6 +631,8 @@ void setup() {
 
   // rng for bullet direction and bullet type
   randomSeed(analogRead(A3));
+  Timer1.initialize(speedIncreaseTime);
+  Timer1.attachInterrupt(onTimerTrigger); // run the timer interrupt
 
   pinMode(vert, INPUT);
   pinMode(horz, INPUT);
@@ -675,7 +688,7 @@ void loop() {
     }
     //leaderboard
   }
-
+  Timer1.restart(); // restart timer when game begins
   // game loop
   while (health > 0) {
 
