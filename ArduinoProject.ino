@@ -8,16 +8,10 @@
 #include <TimerOne.h>
 #include "Sound.hpp"
 
-enum menuItem {
-  Play,
-  Difficulty,
-  Leaderboard,
-};
-
-enum difficulty {
-  Easy,
-  Medium,
-  Hard,
+enum class Difficulty : uint8_t {
+  Easy = 0,
+  Medium = 1,
+  Hard = 2,
 };
 
 enum class Direction : uint8_t {
@@ -41,6 +35,15 @@ enum class BulletType : uint8_t {
   FastLowDamage,
   NoBlock
 };
+
+enum class SceneType : uint8_t {
+  MainMenu,
+  DifficultyMenu,
+  LeaderboardMenu,
+  Ingame,
+  GameOver
+};
+
 
 struct ShieldState {
   Direction direction = Direction::None;
@@ -84,7 +87,6 @@ const uint8_t totalBulletWeights = [&]() {
   }
   return totalWeight;
 }();
-
 
 
 // Define the TFT pins
@@ -143,51 +145,19 @@ unsigned long lastFrame = 0;
 
 //Gamestate variables
 
-//booleans to keep track of which screens we're in currently - mainMenu is initally true because its the first menu we want to display
 
-bool menuScreen = true;
+// Current scene. This is basically which "Screen" we're on
+SceneType currentScene = SceneType::MainMenu;
 
-bool mainMenu = true;
-
-bool difficultyMenu = false;
-
-bool lbScreen = false;
+Difficulty currentDifficulty = Difficulty::Medium;
 
 // self explanatory
 bool healthHasChanged = false;
 
 volatile int32_t speedMultiplier = 1;
 
-const int speedMultIncrease = 0.1;
-const int speedIncreaseTime = 4 * 1000 * 1000; // in microseconds
-
-
-// cursor position
-int cursorPosition = 0;
-
-int lastCursorPosition = -1;
-
-Direction lastMenuDirection = Direction::None;
-
-// menu screen items
-const char* menuOptions[3]{
-  "Play",
-  "Difficulty",
-  "Leaderboard"
-};
-
-// difficulty screen items
-const char* difficultyOptions[3]{
-  "Easy",
-  "Medium",
-  "Hard"
-};
-
-// length of menu array
-int menuOptionsL = sizeof(menuOptions) / sizeof(menuOptions[0]);
-
-// length of difficulty options
-int difficultyOptionsL = sizeof(difficultyOptions) / sizeof(difficultyOptions[0]);
+int speedMultIncrease = 0.1;
+int speedIncreaseTime = 4 * 1000 * 1000; // x sec in microseconds
 
 //container to keep track of active bullets.
 EntityContainer<Bullet, 8> bullets = {};
@@ -207,6 +177,7 @@ Direction lastJoystickDirection = Direction::None;
 
 // Initialize the display
 Adafruit_ILI9341 tft(TFT_CS, TFT_DC, 11, 13, TFT_RST, 12);
+
 
 const Sprite<heartSizeX, heartSizeY> heart = {
   .data = {
@@ -290,7 +261,7 @@ Sprite<shieldSizeX, shieldSizeY> shieldVertical = {
 Sprite<shieldSizeY, shieldSizeX> shieldHorizontal = shieldVertical.GetRotatedSprite();
 
 void onTimerTrigger() {
-  if(!menuScreen) {
+  if(currentScene == SceneType::Ingame) {
     speedMultiplier += speedMultIncrease;
   }
 }
@@ -462,47 +433,6 @@ void processJoystickInput(Direction joystickDirection) {
   currentShieldState.direction = joystickDirection;
 }
 
-void displayMenu(const char** options, int optionsLength) {
-  Direction currentDir = getJoystickDirection();
-
-  if (currentDir != lastMenuDirection) {
-
-    if (currentDir == Direction::Up && cursorPosition > 0) {
-      cursorPosition--;
-    } else if (currentDir == Direction::Down && cursorPosition < optionsLength - 1) {
-      cursorPosition++;
-    }
-
-    lastMenuDirection = currentDir;
-  }
-
-  if (cursorPosition != lastCursorPosition) {
-    tft.setTextColor(ILI9341_WHITE);
-    tft.setTextSize(2);
-
-    // draw the menu items only once when the menu first opens
-    if (lastCursorPosition == -1) {
-      for (int a = 0; a < optionsLength; a++) {
-        tft.setCursor(0, 50 + (a * 60));
-        tft.print(options[a]);
-      }
-    }
-
-    // only update the small cursor spot next to each item
-    for (int a = 0; a < optionsLength; a++) {
-      int textWidth = strlen(options[a]) * 12;  // 6px base width * textSize 2
-      int yPos = 50 + (a * 60);
-
-      if (cursorPosition == a) {
-        tft.setCursor(textWidth, yPos);
-        tft.print(" <");
-      } else {
-        tft.fillRect(textWidth, yPos, 24, 16, ILI9341_BLACK);
-      }
-    }
-    lastCursorPosition = cursorPosition;
-  }
-}
 
 // function to initialize play area
 void playArea() {
@@ -512,11 +442,245 @@ void playArea() {
   tft.fillRect(20, 30, 10, 10, ILI9341_RED);
   tft.fillRect(280, 30, 10, 10, ILI9341_RED);
   // draw inital health
-  tft.setCursor(42, 0);
+  //tft.setCursor(42, 0);
+  //tft.setTextColor(ILI9341_WHITE);
+  //tft.setTextSize(2);
+  //tft.print("HP: ");
+  //tft.print(health);
+}
+
+
+struct MenuItem {
+  const char* name;
+  void (*onClick)();
+
+};
+
+struct Menu {
+  MenuItem* options;
+  uint8_t optionCount = 0;
+  uint8_t cursorPosition = 0;
+  bool cursorPosChanged = true; // Start 
+  Direction lastJoystickDirection = Direction::None;
+  Menu(MenuItem* opt, uint8_t optCount) {
+    options = opt;
+    optionCount = optCount;
+    cursorPosition = 0;
+    cursorPosChanged = true;
+    Direction lastJoystickDirection = Direction::None;
+  }
+  void OnButtonPress() {
+    options[cursorPosition].onClick();
+  }
+  void OnJoystickMove(Direction direction) {
+    Serial.println(uint8_t(direction));
+    if(direction != lastJoystickDirection) {
+      lastJoystickDirection = direction;
+      if (direction == Direction::Up) {
+        if(cursorPosition == 0) {
+          // Cant move further up, so go back to the bottom
+          cursorPosChanged = true;
+          cursorPosition = optionCount - 1;
+        }
+        else {
+          cursorPosChanged = true;
+          cursorPosition--;
+        }
+      } 
+      else if (direction == Direction::Down) {
+        if(cursorPosition >= optionCount - 1) {
+          // Cant move further down, so go back to the top
+          cursorPosChanged = true;
+          cursorPosition = 0;
+        }
+        else {
+          cursorPosChanged = true;
+          cursorPosition++;
+        }
+      }
+    }
+  }
+  // Should be called once a menu is opened, or re-opened from another scene
+  void InitMenu() {
+    // Set these to their default position
+    cursorPosition = 0;
+    cursorPosChanged = true;
+    lastJoystickDirection = Direction::None;
+    tft.setTextSize(2);
+    // draw the menu items only once when the menu first opens
+    for (int a = 0; a < optionCount; a++) {
+      tft.setCursor(0, 50 + (a * 60));
+      tft.print(options[a].name);
+    }
+  }
+  // Should be called each frame
+  void DisplayMenu() {
+    if (cursorPosChanged) {
+      cursorPosChanged = false;
+      tft.setTextColor(ILI9341_WHITE);
+      tft.setTextSize(2);
+      // only update the small cursor spot next to each item
+      for (int a = 0; a < optionCount; a++) {
+        int textWidth = strlen(options[a].name) * 12;  // 6px base width * textSize 2
+        int yPos = 50 + (a * 60);
+
+        if (cursorPosition == a) {
+          tft.setCursor(textWidth, yPos);
+          tft.print(" <");
+        } else {
+          tft.fillRect(textWidth, yPos, 24, 16, ILI9341_BLACK);
+        }
+      }
+    }
+  }
+};
+
+
+// Menu definitions
+void mainMenuPlayOnClick() {
+  switchScene(SceneType::Ingame);
+}
+void mainMenuDifficultyOnClick() {
+  switchScene(SceneType::DifficultyMenu);
+}
+void mainMenuLeaderboardOnClick() {
+
+}
+// menu screen items
+MenuItem mainMenuOptions[3]{
+  {"Play", mainMenuPlayOnClick },
+  {"Difficulty", mainMenuDifficultyOnClick },
+  {"Leaderboard", mainMenuLeaderboardOnClick }
+};
+
+void diffMenuEasyOnClick() {
+  currentDifficulty = Difficulty::Easy;
+  EEPROM.put(0, currentDifficulty);
+  switchScene(SceneType::MainMenu);
+}
+
+void diffMenuMediumOnClick() {
+  currentDifficulty = Difficulty::Medium;
+  EEPROM.put(0, currentDifficulty);
+  switchScene(SceneType::MainMenu);
+}
+void diffMenuHardOnClick() {
+  currentDifficulty = Difficulty::Hard;
+  EEPROM.put(0, currentDifficulty);
+  switchScene(SceneType::MainMenu);
+}
+
+// difficulty screen items
+MenuItem diffMenuOptions[3]{
+  {"Easy", diffMenuEasyOnClick },
+  {"Medium", diffMenuMediumOnClick },
+  {"Hard", diffMenuHardOnClick}
+};
+
+void gameOverTryAgainOnClick() {
+  switchScene(SceneType::Ingame);
+}
+void gameOverMainMenuOnClick() {
+  switchScene(SceneType::MainMenu);
+}
+
+// game over screen items
+MenuItem gameOverOptions[2] = {
+  {"Try Again", gameOverTryAgainOnClick },
+  {"Main Menu", gameOverMainMenuOnClick }
+};
+
+
+Menu mainMenu(
+  mainMenuOptions,
+  sizeof(mainMenuOptions) / sizeof(mainMenuOptions[0])
+);
+
+Menu difficultyMenu(
+  diffMenuOptions,
+  sizeof(diffMenuOptions) / sizeof(diffMenuOptions[0])
+);
+Menu gameOverMenu(
+  gameOverOptions,
+  sizeof(gameOverOptions) / sizeof(gameOverOptions[0])
+);
+
+void InitIngameScene() {
+  // Render play area once
+  playArea();
+  // Reset generic gamestate variables
+  speedMultiplier = 1;
+  currentScore = 0;
+  healthHasChanged = false;
+  scoreHasChanged = false;
+  currentShieldState = {};
+  lastJoystickDirection = Direction::None;
+  bullets.Clear();
+  deletedBullets.Clear();
+  // Reset game variables dependent on difficulty to the current difficulty
+  switch(currentDifficulty) {
+  case Difficulty::Easy:
+    bulletRate = 1000;
+    speedMultIncrease = 0.05;
+    speedIncreaseTime = 6 * 1000 * 1000; // x sec in microseconds
+    health = 15;
+    break;
+  case Difficulty::Medium:
+    bulletRate = 750;
+    speedMultIncrease = 0.1;
+    speedIncreaseTime = 4 * 1000 * 1000; // x sec in microseconds
+    health = 10;
+    break;
+  case Difficulty::Hard:
+    bulletRate = 500;
+    speedMultIncrease = 0.15;
+    speedIncreaseTime = 3 * 1000 * 1000; // x sec in microseconds
+    health = 6;
+    break;
+  }
+  Timer1.restart(); // restart timer when game begins
+}
+void InitMainMenuScene() {
+  // draw logo in the main menu
+  drawSprite(192, 72, heart, 12);
+  mainMenu.InitMenu();
+}
+void InitDifficultyMenuScene() {
+  difficultyMenu.InitMenu();
+}
+void InitLeaderboardMenuScene() {
+  // TODO
+}
+void InitGameOverScene() {
+  // draw the "Dead" text
+  tft.setCursor(140, 110);
   tft.setTextColor(ILI9341_WHITE);
-  tft.setTextSize(2);
-  tft.print("HP: ");
-  tft.print(health);
+  tft.setTextSize(4);
+  tft.print("Dead :(");
+  gameOverMenu.InitMenu();
+}
+
+void switchScene(SceneType type) {
+  // placeholder to clear previous draws
+  tft.fillScreen(ILI9341_BLACK);
+  switch(type) {
+    case SceneType::MainMenu:
+      InitMainMenuScene();
+      break;
+    case SceneType::DifficultyMenu:
+      InitDifficultyMenuScene();
+      break;
+    case SceneType::LeaderboardMenu:
+      InitLeaderboardMenuScene();
+      break;
+    case SceneType::Ingame:
+      InitIngameScene();
+      break;
+    case SceneType::GameOver:
+      InitGameOverScene();
+      break;
+  }
+  currentScene = type;
 }
 
 void drawSpritesToScreen() {
@@ -615,7 +779,8 @@ void drawScoreCounterDisplay() {
 void displayHealth() {
   if (healthHasChanged) {
     healthHasChanged = false;
-    tft.fillRect(42, 0, 60, 40, ILI9341_BLACK);
+    // remove the old HP display first
+    tft.fillRect(42, 0, 80, 40, ILI9341_BLACK);
     tft.setCursor(42, 0);
     tft.setTextColor(ILI9341_WHITE);
     tft.setTextSize(2);
@@ -623,80 +788,37 @@ void displayHealth() {
     tft.print(health);
   }
 }
-// function to handle exiting screens
-void exitMenu(bool& menu) {
-  menu = false;
-  lastCursorPosition = -1;
-  cursorPosition = 0;
-  tft.fillRect(0, 0, 160, 240, ILI9341_BLACK);
-}
 
-void setup() {
-  Serial.begin(9600);
-
-  // rng for bullet direction and bullet type
-  randomSeed(analogRead(A3));
-  Timer1.initialize(speedIncreaseTime);
-  Timer1.attachInterrupt(onTimerTrigger); // run the timer interrupt
-
-  pinMode(vert, INPUT);
-  pinMode(horz, INPUT);
-  pinMode(BuzzerPin, OUTPUT);
-  pinMode(SEL_PIN, INPUT_PULLUP);
-
-  // get the saved health value (this depends on which difficulty you chose last). default is 3 (if a difficulty hasnt been chosed yet)
-  EEPROM.get(0, health);
-  if (health < 1 || health > 3) {
-    health = 3;
-  }
-  // Start the display
-  tft.begin();
-
-  // Set screen orientation
-  tft.setRotation(1);
-
-  // draw logo
-  drawSprite(192, 72, heart, 12);
-}
-
-void loop() {
-
-  //menu screen
-  while (menuScreen) {
-    if (mainMenu) {
-      displayMenu(menuOptions, menuOptionsL);
-      if (digitalRead(SEL_PIN) == LOW && cursorPosition == Play) {
-        playArea();
-        menuScreen = false;
-      } else if (digitalRead(SEL_PIN) == LOW && cursorPosition == Difficulty) {
-        exitMenu(mainMenu);
-        difficultyMenu = true;
-      }
+void difficultyMenuLoop() {
+  while (currentScene == SceneType::DifficultyMenu) {
+    Direction joystickDirection = getJoystickDirection();
+    difficultyMenu.OnJoystickMove(joystickDirection);
+    difficultyMenu.DisplayMenu();
+    int button = digitalRead(SEL_PIN);
+    if(button == LOW) {
+      difficultyMenu.OnButtonPress();
     }
-    if (difficultyMenu) {
-      displayMenu(difficultyOptions, difficultyOptionsL);
-      if (digitalRead(SEL_PIN) == LOW && cursorPosition == Easy) {
-        exitMenu(difficultyMenu);
-        health = 3;
-        EEPROM.put(0, health);
-        mainMenu = true;
-      } else if (digitalRead(SEL_PIN) == LOW && cursorPosition == Medium) {
-        exitMenu(difficultyMenu);
-        health = 2;
-        EEPROM.put(0, health);
-        mainMenu = true;
-      } else if (digitalRead(SEL_PIN) == LOW && cursorPosition == Hard) {
-        exitMenu(difficultyMenu);
-        health = 1;
-        EEPROM.put(0, health);
-        mainMenu = true;
-      }
+  }
+}
+
+void mainMenuLoop() {
+  //menu screen
+  while (currentScene == SceneType::MainMenu) {
+    Direction joystickDirection = getJoystickDirection();
+    mainMenu.OnJoystickMove(joystickDirection);
+    mainMenu.DisplayMenu();
+    // The button itself could probably be an interrupt
+    int button = digitalRead(SEL_PIN);
+    if(button == LOW) {
+      mainMenu.OnButtonPress();
     }
     //leaderboard
   }
-  Timer1.restart(); // restart timer when game begins
+}
+
+void ingameLoop() {
   // game loop
-  while (health > 0) {
+  while (currentScene == SceneType::Ingame) {
 
     // Check if it's time for a game state update
     int miliseconds = millis();
@@ -718,6 +840,7 @@ void loop() {
         bullets.Add(InitBullet(bulletDirection, type));
         lastBullet = miliseconds;
       }
+      // Bullet position update, and collition checks
       for (int i = 0; i < bullets.Size(); i++) {
         auto& bullet = bullets.Get(i);
         updateBulletPosition(bullet);
@@ -749,13 +872,66 @@ void loop() {
       // Draw the hp amount
       displayHealth();
     }
-    if (health == 0) {
-      tft.fillScreen(ILI9341_BLACK);
+    if (health <= 0) {
+      switchScene(SceneType::GameOver);
     }
   }
+}
+void gameOverLoop() {
+  //menu screen
+  while (currentScene == SceneType::GameOver) {
+    gameOverMenu.DisplayMenu();
+    Direction joystickDirection = getJoystickDirection();
+    gameOverMenu.OnJoystickMove(joystickDirection);
+    // The button itself could probably be an interrupt
+    int button = digitalRead(SEL_PIN);
+    if(button == LOW) {
+      gameOverMenu.OnButtonPress();
+    }
+  }
+}
 
-  tft.setCursor(90, 110);
-  tft.setTextColor(ILI9341_WHITE);
-  tft.setTextSize(4);
-  tft.print("Dead :(");
+void setup() {
+  Serial.begin(9600);
+
+  // rng for bullet direction and bullet type
+  randomSeed(analogRead(A3));
+  Timer1.initialize(speedIncreaseTime);
+  Timer1.attachInterrupt(onTimerTrigger); // run the timer interrupt
+
+  pinMode(vert, INPUT);
+  pinMode(horz, INPUT);
+  pinMode(BuzzerPin, OUTPUT);
+  pinMode(SEL_PIN, INPUT_PULLUP);
+
+  // get the saved difficulty value (this depends on which difficulty you chose last)
+  EEPROM.get(0, currentDifficulty);
+  // Start the display
+  tft.begin();
+
+  // Set screen orientation
+  tft.setRotation(1);
+  // We start on the main menu
+  switchScene(SceneType::MainMenu);
+}
+
+void loop() {
+  // State machine keeping track of which scene we're in, and dispatching the appropriate logic
+  switch(currentScene) {
+    case SceneType::MainMenu:
+      mainMenuLoop();
+      break;
+    case SceneType::DifficultyMenu:
+      difficultyMenuLoop();
+      break;
+    case SceneType::LeaderboardMenu:
+      //InitLeaderboardMenuScene();
+      break;
+    case SceneType::Ingame:
+      ingameLoop();
+      break;
+    case SceneType::GameOver:
+      gameOverLoop();
+      break;
+  }
 }

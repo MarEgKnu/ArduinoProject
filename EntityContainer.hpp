@@ -18,7 +18,6 @@ public:
   // default constructor. Init _freeQueue so all free indicies are present in order
   EntityContainer() {
     for(int16_t i = MaxSize - 1;i >= 0;i--) {
-      Serial.println(i);
       _freeQueue.PushBack(i);
     }
   }
@@ -74,6 +73,9 @@ public:
         _items[unsigned_index].item = {};
         _items[unsigned_index].isFree = true;
       }
+  }
+  void Clear() {
+    *this = EntityContainer();
   }
   // Attempts to delete the given index. Returns true if it was sucessfully deleted, and false if the index is invalid and was not deleted
   bool Delete(int16_t index) {
