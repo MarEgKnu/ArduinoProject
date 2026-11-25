@@ -54,13 +54,44 @@ struct Bullet {
   bool isActive = false;
 };
 
+const uint8_t bulletWeights[] = {
+  50, // Normal
+  15, // SlowHighDamage
+  15, // FastLowDamage
+  20 // NoBlock
+};
+const uint8_t bulletDamage[] = {
+  2, // Normal
+  4, // SlowHighDamage
+  1, // FastLowDamage
+  2 // NoBlock
+};
+const uint8_t bulletSpeed[] = {
+  5, // Normal
+  3, // SlowHighDamage
+  10, // FastLowDamage
+  5 // NoBlock
+};
+
+const uint8_t bulletWeightSize = sizeof(bulletWeights) / sizeof(bulletWeights[0]);
+
+const uint8_t totalBulletWeights = [&]() {
+  int totalWeight = 0;
+  for(int i = 0; i < bulletWeightSize;i++) {
+    totalWeight += bulletWeights[i];
+  }
+  return totalWeight;
+}();
+
+
+
 // Define the TFT pins
 #define TFT_CS 10
 #define TFT_DC 9
 #define TFT_RST 8
 #define vert A12
 #define horz A11
-#define SEL_PIN 6
+#define SEL_PIN 22
 
 const int screenSizeX = 320;
 const int screenSizeY = 240;
@@ -98,14 +129,11 @@ const int shieldSizeY = 10;
 unsigned long lastUpdate = 0;
 const int updateInterval = 32;
 
-
-
 // last new bullet spawned
 unsigned long lastBullet;
 
 // speed of bullet spawn and bullet speed (we use interrupt to tweak this)
 int bulletRate = 750;
-int bulletSpeed = 5;
 // Num frames per second
 const int frameRate = 30;
 const int msPerFrame = 1000 / frameRate;
@@ -164,7 +192,7 @@ EntityContainer<Bullet, 8> bullets = {};
 SizedArray<Bullet, 8> deletedBullets = {};
 
 // how many hits the player can take. can be changed from menu eventually
-int health = 3;
+int health = 10;
 
 uint32_t currentScore = 0;     // current score for player
 bool scoreHasChanged = false;  // flag for when the score changes, and drawing a new counter is needed
@@ -275,6 +303,50 @@ Direction getJoystickDirection() {
   } else {
     return Direction::None;
   }
+}
+
+BulletType generateBulletType() {
+  int weight = random(0, totalBulletWeights - 1);
+  uint8_t weightTest = bulletWeights[uint8_t(BulletType::Normal)];
+  if(weight < weightTest) {
+    return BulletType::Normal;
+  }
+  weightTest += bulletWeights[uint8_t(BulletType::SlowHighDamage)];
+  if(weight < weightTest) {
+    return BulletType::SlowHighDamage;
+  }
+  weightTest += bulletWeights[uint8_t(BulletType::FastLowDamage)];
+  if(weight < weightTest) {
+    return BulletType::FastLowDamage;
+  }
+  else {
+    return BulletType::NoBlock;
+  }
+}
+
+void onPlayerHit(const Bullet& bullet, uint8_t bulletIndex) {
+    if(bullet.type != BulletType::NoBlock) {
+      uint8_t damage = bulletDamage[uint8_t(bullet.type)];
+      health -= damage;
+      healthHasChanged = true;
+    }
+    else {
+      setNewScore(currentScore + 1);
+    }
+    deletedBullets.PushBack(bullet);
+    bullets.DeleteUnsafe(bulletIndex);
+}
+void onShieldHit(const Bullet& bullet, uint8_t bulletIndex) {
+    if(bullet.type == BulletType::NoBlock) {
+      uint8_t damage = bulletDamage[uint8_t(bullet.type)];
+      health -= damage;
+      healthHasChanged = true;
+    }
+    else {
+      setNewScore(currentScore + 1);
+    }
+    deletedBullets.PushBack(bullet);
+    bullets.DeleteUnsafe(bulletIndex);
 }
 
 void drawRectangle(const Rectangle& rectangle, SoftwareColor color) {
@@ -438,7 +510,8 @@ void drawSpritesToScreen() {
   // draw bullets
   for (int i = 0; i < bullets.Size(); i++) {
     const auto& bullet = bullets.Get(i);
-    drawSprite(bullet.position.x, bullet.position.y, bulletNormal);
+    const auto& bulletSprite = GetBulletTypeSprite(bullet.type);
+    drawSprite(bullet.position.x, bullet.position.y, bulletSprite);
   }
   const auto& shield = currentShieldState;
   // draw shield
@@ -461,18 +534,19 @@ void drawSpritesToScreen() {
 void updateBulletPosition(Bullet& bullet) {
   // store last position
   bullet.lastPosition = bullet.position;
+  uint8_t speed = bulletSpeed[uint8_t(bullet.type)];
   switch (bullet.direction) {
     case BulletDirection::Left:
-      bullet.position.x += bulletSpeed;
+      bullet.position.x += speed;
       break;
     case BulletDirection::Right:
-      bullet.position.x -= bulletSpeed;
+      bullet.position.x -= speed;
       break;
     case BulletDirection::Up:
-      bullet.position.y += bulletSpeed;
+      bullet.position.y += speed;
       break;
     case BulletDirection::Down:
-      bullet.position.y -= bulletSpeed;
+      bullet.position.y -= speed;
       break;
   }
 }
@@ -620,8 +694,9 @@ void loop() {
       //spawns new bullet after millis exceeds bulletrate. assign direction, type and array to it
       if (miliseconds - lastBullet >= bulletRate) {
         BulletDirection bulletDirection = BulletDirection(random(0, 4));
+        BulletType type = generateBulletType();
         // If not enough space, it will not insert it
-        bullets.Add(InitBullet(bulletDirection, BulletType::Normal));
+        bullets.Add(InitBullet(bulletDirection, type));
         lastBullet = miliseconds;
       }
       for (int i = 0; i < bullets.Size(); i++) {
@@ -632,19 +707,14 @@ void loop() {
 
         bool collidesWithShield = currentShieldState.direction != Direction::None && bulletBoundingBox.RectCollisionCheck(currentShieldState.currentPosition);
         if (collidesWithShield) {
-          deletedBullets.PushBack(bullet);
-          bullets.DeleteUnsafe(i);
-          setNewScore(currentScore + 1);
+          onShieldHit(bullet, i);
           continue;
         }
         Rectangle playerBoundingBox = bulletSprite.GetBoundingBox(heartDrawPosX, heartDrawPosY);
         bool collidesWithPlayer = bulletBoundingBox.RectCollisionCheck(playerBoundingBox);
-        if (collidesWithPlayer && (millis() - lastHit >= damageCooldown)) {
-          health--;
-          healthHasChanged = true;
-          displayHealth();
-          lastHit = millis();
-          break;
+        if (collidesWithPlayer) {
+          onPlayerHit(bullet, i);
+          continue;
         }
       }
     }
@@ -657,6 +727,8 @@ void loop() {
       drawSpritesToScreen();
       // Display score counter
       drawScoreCounterDisplay();
+      // Draw the hp amount
+      displayHealth();
     }
     if (health == 0) {
       tft.fillScreen(ILI9341_BLACK);
