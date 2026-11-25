@@ -33,3 +33,20 @@ public:
     return true;
   }
 };
+
+
+void drawRectangle(const Rectangle& rectangle, SoftwareColor color, Adafruit_ILI9341& tft) {
+  int xStart = rectangle.topLeftCorner.x;
+  int yStart = rectangle.topLeftCorner.y;
+  int xEnd = rectangle.bottomRightCorner.x;
+  int yEnd = rectangle.bottomRightCorner.y;
+  int xSize = xEnd - xStart;
+  int ySize = yEnd - yStart;
+  int hrwdColor = SoftwareColorToHardwareColor(color);
+  tft.fillRect(
+    xStart,
+    yStart,
+    xSize,
+    ySize,
+    hrwdColor);
+}

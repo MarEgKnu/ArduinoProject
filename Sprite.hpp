@@ -78,3 +78,21 @@ struct Sprite {
   }
 
 };
+
+template<uint8_t XDim, uint8_t YDim>
+void drawSprite(int x, int y, const Sprite<XDim, YDim>& sprite, Adafruit_ILI9341& tft, int pixelOverride = 0) {
+  // in case we want to use a different pixel multi (like in logo)
+  int scale = (pixelOverride > 0) ? pixelOverride : pixel_multiplier;
+
+  for (int row = 0; row < YDim; row++) {
+    for (int col = 0; col < XDim; col++) {
+      int colorID = SoftwareColorToHardwareColor(SoftwareColor(sprite.data[row][col]));
+      tft.fillRect(
+        x + col * scale,
+        y + row * scale,
+        scale,
+        scale,
+        colorID);
+    }
+  }
+}

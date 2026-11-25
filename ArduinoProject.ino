@@ -55,6 +55,27 @@ struct Bullet {
   bool isActive = false;
 };
 
+struct GameState {
+  Adafruit_ILI9341 tft(TFT_CS, TFT_DC, 11, 13, TFT_RST, 12);
+  // last general update
+  unsigned long lastUpdate = 0;
+  // last new bullet spawned
+  unsigned long lastBullet = 0;
+  // speed of bullet spawn and bullet speed (we use interrupt to tweak this)
+  int bulletRate = 750;
+  unsigned long lastFrame = 0;
+  //booleans to keep track of which screens we're in currently - mainMenu is initally true because its the first menu we want to display
+  bool menuScreen = true;
+  bool mainMenu = true;
+  bool difficultyMenu = false;
+  bool lbScreen = false;
+  // self explanatory
+  bool healthHasChanged = false;
+  volatile int32_t speedMultiplier = 1;
+  
+
+}
+
 const uint8_t bulletWeights[] = {
   50, // Normal
   15, // SlowHighDamage
@@ -127,35 +148,14 @@ const int shieldOffsetFromPlayer = 6;
 const int shieldSizeX = 2;
 const int shieldSizeY = 10;
 
-unsigned long lastUpdate = 0;
 const int updateInterval = 32;
 
-// last new bullet spawned
-unsigned long lastBullet;
-
-// speed of bullet spawn and bullet speed (we use interrupt to tweak this)
-int bulletRate = 750;
 // Num frames per second
 const int frameRate = 30;
 const int msPerFrame = 1000 / frameRate;
-unsigned long lastFrame = 0;
 
 //Gamestate variables
 
-//booleans to keep track of which screens we're in currently - mainMenu is initally true because its the first menu we want to display
-
-bool menuScreen = true;
-
-bool mainMenu = true;
-
-bool difficultyMenu = false;
-
-bool lbScreen = false;
-
-// self explanatory
-bool healthHasChanged = false;
-
-volatile int32_t speedMultiplier = 1;
 
 const int speedMultIncrease = 0.1;
 const int speedIncreaseTime = 4 * 1000 * 1000; // in microseconds
@@ -357,39 +357,6 @@ void onShieldHit(const Bullet& bullet, uint8_t bulletIndex) {
     bullets.DeleteUnsafe(bulletIndex);
 }
 
-void drawRectangle(const Rectangle& rectangle, SoftwareColor color) {
-  int xStart = rectangle.topLeftCorner.x;
-  int yStart = rectangle.topLeftCorner.y;
-  int xEnd = rectangle.bottomRightCorner.x;
-  int yEnd = rectangle.bottomRightCorner.y;
-  int xSize = xEnd - xStart;
-  int ySize = yEnd - yStart;
-  int hrwdColor = SoftwareColorToHardwareColor(color);
-  tft.fillRect(
-    xStart,
-    yStart,
-    xSize,
-    ySize,
-    hrwdColor);
-}
-
-template<uint8_t XDim, uint8_t YDim>
-void drawSprite(int x, int y, const Sprite<XDim, YDim>& sprite, int pixelOverride = 0) {
-  // in case we want to use a different pixel multi (like in logo)
-  int scale = (pixelOverride > 0) ? pixelOverride : pixel_multiplier;
-
-  for (int row = 0; row < YDim; row++) {
-    for (int col = 0; col < XDim; col++) {
-      int colorID = SoftwareColorToHardwareColor(SoftwareColor(sprite.data[row][col]));
-      tft.fillRect(
-        x + col * scale,
-        y + row * scale,
-        scale,
-        scale,
-        colorID);
-    }
-  }
-}
 
 void clearOldSpritesFromScreen() {
   // Remove bullets with a diffrent position than last update
